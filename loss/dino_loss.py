@@ -1,8 +1,7 @@
-
-
-
-
-
+import torch
+import torch.distributed as dist
+import torch.nn.functional as F
+from torch import nn
 
 
 class DINOLoss(nn.Module):
