@@ -383,6 +383,7 @@ class DINOLoss(nn.Module):
                         teacher_temp, warmup_teacher_temp_epochs),
             np.ones(nepochs - warmup_teacher_temp_epochs) * teacher_temp
         ))
+        self.printed_info = False  # Flag to ensure printing only once
 
     def forward(self, student_output, teacher_output, epoch):
         """
@@ -395,6 +396,17 @@ class DINOLoss(nn.Module):
         temp = self.teacher_temp_schedule[epoch]
         teacher_out = F.softmax((teacher_output - self.center) / temp, dim=-1)
         teacher_out = teacher_out.detach().chunk(2)
+
+        # impresiones de la salidas función de pérdida
+        if not self.printed_info:
+            self.printed_info = True
+            # Print information about teacher_out and student_out recrops
+            for i, crop in enumerate(teacher_out):
+                print(f"teacher output función de pérdida crop {i + 1} shape: {crop.shape}")
+                print(f"teacher output función de pérdida crop {i + 1} type: {crop.dtype}")
+            for i, crop in enumerate(student_out):
+                print(f"student output función de pérdida crop {i + 1} shape: {crop.shape}")
+                print(f"student output función de pérdida crop {i + 1} type: {crop.dtype}")
 
         total_loss = 0
         n_loss_terms = 0
