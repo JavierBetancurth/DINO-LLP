@@ -323,6 +323,13 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
             print("Loss is {}, stopping training".format(loss.item()), force=True)
             sys.exit(1)
 
+        # imprimir información de las salidas (solo una vez)
+        if it == 0 and utils.is_main_process():
+            print("teacher output shape:", teacher_output.shape)
+            print("teacher output type:", teacher_output.dtype)
+            print("student output shape:", student_output.shape)
+            print("student output type:", student_output.dtype)
+
         # student update
         optimizer.zero_grad()
         param_norms = None
