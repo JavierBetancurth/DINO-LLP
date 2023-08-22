@@ -13,7 +13,7 @@ import torch.nn.functional as F
 # import torch.distributed as dist
 
 
-logger = logging.getLogger("dinov2")
+logger = logging.getLogger("DINO")
 
 
 class KoLeoLoss(nn.Module):
@@ -36,14 +36,14 @@ class KoLeoLoss(nn.Module):
         _, I = torch.max(dots, dim=1)  # noqa: E741
         return I
 
-    def forward(self, student_output, eps=1e-8):
+    def forward(self, estimated_proportions, eps=1e-8):
         """
         Args:
             student_output (BxD): backbone output of student
         """
         with torch.cuda.amp.autocast(enabled=False):
-            student_output = F.normalize(student_output, eps=eps, p=2, dim=-1)
-            I = self.pairwise_NNs_inner(student_output)  # noqa: E741
-            distances = self.pdist(student_output, student_output[I])  # BxD, BxD -> B
+            estimated_proportions = F.normalize(estimated_proportions, eps=eps, p=2, dim=-1)
+            I = self.pairwise_NNs_inner(estimated_proportions)  # noqa: E741
+            distances = self.pdist(estimated_proportions, estimated_proportions[I])  # BxD, BxD -> B
             loss = -torch.log(distances + eps).mean()
         return loss
