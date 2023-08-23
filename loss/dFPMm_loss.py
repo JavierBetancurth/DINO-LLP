@@ -7,6 +7,8 @@ import torch.distributed as dist
 import torch.nn.functional as F
 from torch import nn
 
+from proportions_assignments.prototypes_layer import Prototypes
+
 class DINOLossdFPMm(nn.Module):
     def __init__(
         self,
@@ -50,6 +52,8 @@ class DINOLossdFPMm(nn.Module):
         teacher_out = F.softmax((teacher_output - self.center) / temp, dim=-1)
         teacher_out = teacher_out.detach().chunk(2)
 
+    # teacher_out_prototypes = Prototypes(teacher_output, numb_prototypes)
+    
     @torch.no_grad()
     def sinkhorn_knopp_proportions(self, teacher_output, epsilon, n_iterations):
         teacher_output = teacher_output.float()
