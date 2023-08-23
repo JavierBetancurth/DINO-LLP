@@ -62,7 +62,7 @@ class DINOLossdFPMm(nn.Module):
         B = Q.shape[1] * world_size  # number of samples to assign
         K = Q.shape[0]  # how many prototypes
 
-        # Apply the constraint to the transportation polytope
+        # apply the constraint to the transportation polytope
         constraint_matrix = torch.ones(K, B) * real_proportions.view(-1, 1)
         Q *= constraint_matrix
 
