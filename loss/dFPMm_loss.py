@@ -37,7 +37,16 @@ class DINOLossdFPMm(nn.Module):
         ))
 
     @torch.no_grad()
-    def forward(self, student_output, teacher_output, real_proportions, estimated_proportions, epoch, alpha=0.5, beta=0.5):
+    def forward(self, 
+                student_output, 
+                teacher_output, 
+                real_proportions, 
+                estimated_proportions, 
+                epoch, 
+                alpha=0.5,
+                beta=0.5,
+               ):
+                   
         student_out = student_output / self.student_temp
         student_out = student_out.chunk(self.ncrops)
 
@@ -79,14 +88,13 @@ class DINOLossdFPMm(nn.Module):
         Q *= B  # the columns must sum to 1 so that Q is an assignment
         return Q.t()
 
-
         total_loss = 0
         n_loss_terms = 0
         for iq, q in enumerate(teacher_out):
             for v in range(len(student_out)):
                 if v == iq:
+                    # skip cases where student and teacher operate on the same view
                     continue
-
                 # Original self-distillation loss
                 loss1 = torch.sum(-q * F.log_softmax(student_out[v], dim=-1), dim=-1)
 
