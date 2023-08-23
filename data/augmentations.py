@@ -5,7 +5,6 @@
 # LICENSE file in the root directory of this source tree.
 
 import logging
-
 from torchvision import transforms
 
 from .transforms import (
@@ -14,7 +13,7 @@ from .transforms import (
 )
 
 
-logger = logging.getLogger("dinov2")
+logger = logging.getLogger("DINO")
 
 
 class DataAugmentationDINO(object):
