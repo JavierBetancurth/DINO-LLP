@@ -276,10 +276,6 @@ def train_dino(args):
     )
     start_epoch = to_restore["epoch"]
 
-    # Crea el directorio "metrics" si no existe
-    metrics_dir = os.path.join(args.output_dir, 'metrics')
-    os.makedirs(metrics_dir, exist_ok=True)
-
     for epoch in range(start_epoch, args.epochs):
         data_loader.sampler.set_epoch(epoch)
 
@@ -342,6 +338,7 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
                     fp16_scaler, args):
     metric_logger = utils.MetricLogger(delimiter="  ")
     header = 'Epoch: [{}/{}]'.format(epoch, args.epochs)
+                        
     for it, (images, _) in enumerate(metric_logger.log_every(data_loader, 10, header)):
         # update weight decay and learning rate according to their schedule
         it = len(data_loader) * epoch + it  # global training iteration
@@ -356,10 +353,8 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
         with torch.cuda.amp.autocast(fp16_scaler is not None):
             teacher_output = teacher(images[:2])  # only the 2 global views pass through the teacher
             student_output = student(images)
-            loss = dino_loss(student_output, teacher_output, epoch)
+            loss = dino_loss(student_output, teacher_output, epoch)           
             
-            # Append the loss value to the loss_values list
-            loss_values.append(loss.item())
 
         if not math.isfinite(loss.item()):
             print("Loss is {}, stopping training".format(loss.item()), force=True)
