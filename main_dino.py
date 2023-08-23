@@ -144,6 +144,10 @@ def train_dino(args):
     print("\n".join("%s: %s" % (k, str(v)) for k, v in sorted(dict(vars(args)).items())))
     cudnn.benchmark = True
 
+    # initialize an empty list to store loss values
+    loss_values = [] # List to store loss values
+    iteration_times = [] # List to store iteration times
+
     # ============ preparing data ... ============
     transform = DataAugmentationDINO(
         args.global_crops_scale,
@@ -353,8 +357,8 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
             teacher_output = teacher(images[:2])  # only the 2 global views pass through the teacher
             student_output = student(images)
             loss = dino_loss(student_output, teacher_output, epoch)
-            loss_values = [] # List to store loss values
-            iteration_times = [] # List to store iteration times
+            
+            # Append the loss value to the loss_values list
             loss_values.append(loss.item())
 
         if not math.isfinite(loss.item()):
