@@ -304,12 +304,7 @@ def train_dino(args):
             data_loader, optimizer, lr_schedule, wd_schedule, momentum_schedule,
             epoch, fp16_scaler, args)
 
-        # ============ writing logs ... ============
-        # Guardar los datos de pérdida en un archivo JSON
-        losses_path = os.path.join(metrics_dir, f'losses_epoch_{epoch}.json')
-        with open(losses_path, 'w') as f:
-            json.dump(loss_values, f)
-            
+        # ============ writing logs ... ============            
         save_dict = {
             'student': student.state_dict(),
             'teacher': teacher.state_dict(),
