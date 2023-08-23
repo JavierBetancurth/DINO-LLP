@@ -272,6 +272,15 @@ def train_dino(args):
     )
     start_epoch = to_restore["epoch"]
 
+    # Crea el directorio "metrics" si no existe
+    metrics_dir = os.path.join(args.output_dir, 'metrics')
+    os.makedirs(metrics_dir, exist_ok=True)
+
+    loss_values = [] # List to store loss values
+    iteration_times = [] # List to store iteration times
+    for epoch in range(start_epoch, args.epochs):
+        data_loader.sampler.set_epoch(epoch)
+
     start_time = time.time()
     # TRAINING CARD
     print("Commencing DINO Training...")
@@ -300,6 +309,11 @@ def train_dino(args):
             epoch, fp16_scaler, args)
 
         # ============ writing logs ... ============
+        # Guardar los datos de pérdida en un archivo JSON
+        losses_path = os.path.join(metrics_dir, f'losses_epoch_{epoch}.json')
+        with open(losses_path, 'w') as f:
+            json.dump(loss_values, f)
+            
         save_dict = {
             'student': student.state_dict(),
             'teacher': teacher.state_dict(),
@@ -392,13 +406,6 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
     print("Averaged stats:", metric_logger)
     return {k: meter.global_avg for k, meter in metric_logger.meters.items()}
 
-# Crea el directorio "metrics" si no existe
-metrics_dir = os.path.join(args.output_dir, 'metrics')
-os.makedirs(metrics_dir, exist_ok=True)
-# Guardar los datos de pérdida en un archivo JSON
-losses_path = os.path.join(metrics_dir, 'losses.json')
-with open(losses_path, 'w') as f:
-    json.dump(losses, f)
     
 class DINOLoss(nn.Module):
     def __init__(self, out_dim, ncrops, warmup_teacher_temp, teacher_temp,
