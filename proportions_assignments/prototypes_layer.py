@@ -29,7 +29,6 @@ class Prototypes(nn.Module):
                 nn.init.constant_(m.weight, 1)
                 nn.init.constant_(m.bias, 0)
 
-
 class MultiPrototypes(nn.Module):
     def __init__(self, output_dim, nmb_prototypes_list):
         super(MultiPrototypes, self).__init__()
