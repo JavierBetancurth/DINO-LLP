@@ -116,6 +116,14 @@ def get_args_parser():
         help="""Scale range of the cropped image before resizing, relatively to the origin image.
         Used for small local view cropping of multi-crop.""")
 
+    # Sinkhorn Knopp parameters
+    parser.add_argument("--epsilon", default=0.05, type=float,
+       help="regularization parameter for Sinkhorn-Knopp algorithm")
+    parser.add_argument("--sinkhorn_iterations", default=3, type=int,
+       help="number of iterations in Sinkhorn-Knopp algorithm")
+    parser.add_argument("--nmb_prototypes", default=3000, type=int,
+       help="number of prototypes")
+
     # Misc
     parser.add_argument('--data_path', default='/path/to/imagenet/train/', type=str,
         help='Please specify path to the ImageNet training data.')
