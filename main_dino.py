@@ -273,7 +273,24 @@ def train_dino(args):
     start_epoch = to_restore["epoch"]
 
     start_time = time.time()
-    print("Starting DINO training !")
+    # TRAINING CARD
+    print("Commencing DINO Training...")
+    print(f"Training will run for {args.epochs} epochs.")
+    print(f"Using {args.arch} architecture with {len(data_loader)} batches per epoch.")
+    print(f"Batch size per GPU: {args.batch_size_per_gpu}, Total batch size: {args.batch_size_per_gpu * utils.get_world_size()}")
+    print(f"Learning rate: {args.lr:.6f}, Weight decay: {args.weight_decay:.6f}")
+    print(f"Using {'FP16' if args.use_fp16 else 'FP32'} precision training.")
+    print(f"Using {'AdamW' if args.optimizer == 'adamw' else ('SGD' if args.optimizer == 'sgd' else 'LARS')} optimizer.")
+    print(f"Multi-Crop Settings: Global Crops Scale: {args.global_crops_scale}, Local Crops: {args.local_crops_number}")
+    print(f"Using Sinkhorn-Knopp with epsilon={args.epsilon} and {args.sinkhorn_iterations} iterations for prototypical assignments.")
+    print(f"Number of Prototypes: {args.nmb_prototypes}")
+    print(f"Data path: {args.data_path}")
+    print(f"Output directory: {args.output_dir}")
+    print("Git SHA:", utils.get_sha())
+    print("Time of starting training:", datetime.datetime.now())
+
+    loss_values = [] # List to store loss values
+    iteration_times = [] # List to store iteration times
     for epoch in range(start_epoch, args.epochs):
         data_loader.sampler.set_epoch(epoch)
 
@@ -326,6 +343,7 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
             teacher_output = teacher(images[:2])  # only the 2 global views pass through the teacher
             student_output = student(images)
             loss = dino_loss(student_output, teacher_output, epoch)
+            loss_values.append(loss.item())
 
         if not math.isfinite(loss.item()):
             print("Loss is {}, stopping training".format(loss.item()), force=True)
