@@ -392,7 +392,14 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
     print("Averaged stats:", metric_logger)
     return {k: meter.global_avg for k, meter in metric_logger.meters.items()}
 
-
+# Crea el directorio "metrics" si no existe
+metrics_dir = os.path.join(args.output_dir, 'metrics')
+os.makedirs(metrics_dir, exist_ok=True)
+# Guardar los datos de pérdida en un archivo JSON
+losses_path = os.path.join(metrics_dir, 'losses.json')
+with open(losses_path, 'w') as f:
+    json.dump(losses, f)
+    
 class DINOLoss(nn.Module):
     def __init__(self, out_dim, ncrops, warmup_teacher_temp, teacher_temp,
                  warmup_teacher_temp_epochs, nepochs, student_temp=0.1,
