@@ -144,10 +144,6 @@ def train_dino(args):
     print("\n".join("%s: %s" % (k, str(v)) for k, v in sorted(dict(vars(args)).items())))
     cudnn.benchmark = True
 
-    # initialize an empty list to store loss values
-    loss_values = [] # List to store loss values
-    iteration_times = [] # List to store iteration times
-
     # ============ preparing data ... ============
     transform = DataAugmentationDINO(
         args.global_crops_scale,
