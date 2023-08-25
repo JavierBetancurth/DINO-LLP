@@ -3,12 +3,12 @@ import os
 import uuid
 from pathlib import Path
 
-from .main_dino_TPU import main_dino_TPU
+from main_dino_TPU import main_dino_TPU
 import submitit
 import torch_xla.distributed.xla_multiprocessing as xmp
 
 def parse_args():
-    parser = argparse.ArgumentParser("Submitit for DINO", parents=[main_dino.get_args_parser()])
+    parser = argparse.ArgumentParser("Submitit for DINO", parents=[main_dino_TPU.get_args_parser()])
     parser.add_argument("--tpu_num_cores", default=8, type=int, help="Number of TPU cores to use")
 
     parser.add_argument("--use_volta32", action='store_true', help="Big models? Use this")
