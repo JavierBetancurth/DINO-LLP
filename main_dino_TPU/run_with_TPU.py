@@ -3,7 +3,7 @@ import os
 import uuid
 from pathlib import Path
 
-from main_dino_TPU import main_dino_TPU
+import main_dino_TPU
 import submitit
 import torch_xla.distributed.xla_multiprocessing as xmp
 
