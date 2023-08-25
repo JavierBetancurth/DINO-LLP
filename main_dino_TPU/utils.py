@@ -468,19 +468,28 @@ def setup_for_distributed(is_master):
 
 
 def init_distributed_mode(args):
-    if 'XRT_TPU_CONFIG' in os.environ:
-        # Use TPU configuration from environment variable
-        tpu_config = os.environ['XRT_TPU_CONFIG'].split(',')
-        args.rank = int(tpu_config[0])
-        args.world_size = int(tpu_config[1])
-        args.gpu = int(tpu_config[2])
-    elif 'SLURM_PROCID' in os.environ:
-        args.rank = int(os.environ['SLURM_PROCID'])
-        args.gpu = args.rank % xm.xrt_world_size()
-        args.world_size = xm.xrt_world_size()
+    if 'COLAB_TPU_ADDR' in os.environ:
+        tpu_address = os.environ['COLAB_TPU_ADDR']
+        args.rank = int(tpu_address.split(';')[1])  # Extract the rank from the TPU address
+        args.world_size = 8  # You might need to set the correct world size for your setup
+        args.gpu = args.rank % torch.cuda.device_count()
+
+        dist.init_process_group(
+            backend="xla",
+            init_method="env://",
+            world_size=args.world_size,
+            rank=args.rank,
+        )
+
+        xm.master_print('| distributed init (rank {}): {}'.format(args.rank, tpu_address))
+        xm.rendezvous('init_distributed')
+
+        torch.cuda.set_device(args.gpu)
+        setup_for_distributed(args.rank == 0)
     else:
-        print('TPU configuration not found.')
+        print('Not running on TPU. Please adjust the code for your setup.')
         sys.exit(1)
+
 
     # Initialize TPU
     xm.initialize_xla_hooks(args.gpu)
