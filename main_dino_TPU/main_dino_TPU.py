@@ -44,25 +44,6 @@ import vision_transformer as vits
 from vision_transformer import DINOHead
 
 
-def init_distributed_mode(args):
-    # Launched with torch.distributed.launch
-    if 'RANK' in os.environ and 'WORLD_SIZE' in os.environ:
-        args.rank = int(os.environ["RANK"])
-        args.world_size = int(os.environ['WORLD_SIZE'])
-        args.device = xm.xla_device()  # Initialize TPU device
-    # Launched with submitit on a slurm cluster
-    elif 'SLURM_PROCID' in os.environ:
-        args.rank = int(os.environ['SLURM_PROCID'])
-        args.device = xm.xla_device()  # Initialize TPU device
-    # Launched naively with `python main_dino.py`
-    else:
-        print('Does not support training without TPU.')
-        sys.exit(1)
-
-    # Barrier is not needed with TPUs
-    setup_for_distributed(args.rank == 0)
-
-
 torchvision_archs = sorted(name for name in torchvision_models.__dict__
     if name.islower() and not name.startswith("__")
     and callable(torchvision_models.__dict__[name]))
@@ -544,4 +525,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser('DINO', parents=[get_args_parser()])
     args = parser.parse_args()
     Path(args.output_dir).mkdir(parents=True, exist_ok=True)
+
+    # Inicialización distribuida
+    init_distributed_mode(args)
+
     train_dino(args)
