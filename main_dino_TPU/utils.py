@@ -32,6 +32,9 @@ from torch import nn
 import torch.distributed as dist
 from PIL import ImageFilter, ImageOps
 
+import torch_xla.distributed.parallel_loader as pl
+import torch_xla.core.xla_model as xm
+
 
 class GaussianBlur(object):
     """
@@ -465,34 +468,30 @@ def setup_for_distributed(is_master):
 
 
 def init_distributed_mode(args):
-    # launched with torch.distributed.launch
-    if 'RANK' in os.environ and 'WORLD_SIZE' in os.environ:
-        args.rank = int(os.environ["RANK"])
-        args.world_size = int(os.environ['WORLD_SIZE'])
-        args.gpu = int(os.environ['LOCAL_RANK'])
-    # launched with submitit on a slurm cluster
+    if 'XRT_TPU_CONFIG' in os.environ:
+        # Use TPU configuration from environment variable
+        tpu_config = os.environ['XRT_TPU_CONFIG'].split(',')
+        args.rank = int(tpu_config[0])
+        args.world_size = int(tpu_config[1])
+        args.gpu = int(tpu_config[2])
     elif 'SLURM_PROCID' in os.environ:
         args.rank = int(os.environ['SLURM_PROCID'])
-        args.gpu = args.rank % torch.cuda.device_count()
-    # launched naively with `python main_dino.py`
-    # we manually add MASTER_ADDR and MASTER_PORT to env variables
-    elif torch.cuda.is_available():
-        print('Will run the code on one GPU.')
-        args.rank, args.gpu, args.world_size = 0, 0, 1
-        os.environ['MASTER_ADDR'] = '127.0.0.1'
-        os.environ['MASTER_PORT'] = '29500'
+        args.gpu = args.rank % xm.xrt_world_size()
+        args.world_size = xm.xrt_world_size()
     else:
-        print('Does not support training without GPU.')
+        print('TPU configuration not found.')
         sys.exit(1)
 
+    # Initialize TPU
+    xm.initialize_xla_hooks(args.gpu)
+    args.device = xm.xla_device()
     dist.init_process_group(
-        backend="nccl",
+        backend="xla-tpu",
         init_method=args.dist_url,
         world_size=args.world_size,
         rank=args.rank,
     )
 
-    torch.cuda.set_device(args.gpu)
     print('| distributed init (rank {}): {}'.format(
         args.rank, args.dist_url), flush=True)
     dist.barrier()
