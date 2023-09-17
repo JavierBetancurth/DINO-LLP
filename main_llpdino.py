@@ -35,7 +35,11 @@ import utils
 import vision_transformer as vits
 from vision_transformer import DINOHead
 
-from loss import kl_loss
+# proportions
+from loss.kl_loss import compute_kl_loss_on_bagbatch
+from proportions_assignments import 
+
+
 
 torchvision_archs = sorted(name for name in torchvision_models.__dict__
     if name.islower() and not name.startswith("__")
