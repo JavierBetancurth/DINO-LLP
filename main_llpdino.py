@@ -365,10 +365,12 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
             
             # Paso a través de la capa de Prototipos
             prototypes_output = prototypes_layer(student_output)
-            loss = compute_kl_loss_on_bagbatch(prototypes_output, real_proportions, device, epsilon)
+            # Calcular la pérdida KL entre las salidas de Prototipos y las proporciones reales del lote
+            loss = compute_kl_loss_on_bagbatch(prototypes_output, class_proportions_list, device, epsilon)
 
             
             # total_loss = loss1 + loss2
+
 
         if not math.isfinite(loss.item()):
             print("Loss is {}, stopping training".format(loss.item()), force=True)
