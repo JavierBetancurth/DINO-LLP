@@ -12,7 +12,7 @@ def compute_kl_loss_on_bagbatch(estimated_proportions, class_proportions_list, e
         real_proportions = torch.tensor(real_proportions, dtype=torch.float32).cuda()
         
         # Move tensors to gpu
-        estimated_proportions, real_proportions = estimated_proportions.cuda(), real_proportions.cuda()  
+        # estimated_proportions, real_proportions = estimated_proportions.cuda(), real_proportions.cuda()  
             
         # Calcular las probabilidades y la pérdida KL
         probabilities = nn.functional.softmax(estimated_proportions, dim=-1)
