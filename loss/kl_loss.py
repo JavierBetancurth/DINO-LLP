@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-# Label proportions-based loss with symmetric cross entropy
+# Label proportions-based loss with asymmetric cross entropy
 def compute_kl_loss_on_bagbatch(estimated_proportions, real_proportions, device, epsilon=1e-8):
     # Move tensors to the configured device
     estimated_proportions = estimated_proportions.to(device)
@@ -13,7 +13,6 @@ def compute_kl_loss_on_bagbatch(estimated_proportions, real_proportions, device,
     avg_prob = torch.mean(probabilities, dim=1)
     avg_prob = torch.clamp(avg_prob, epsilon, 1 - epsilon)
     loss = torch.sum(-probabilities * torch.log(avg_prob), dim=-1).mean()
-
     return loss
 
 
