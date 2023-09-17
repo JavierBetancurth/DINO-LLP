@@ -6,13 +6,15 @@ def compute_kl_loss_on_bagbatch(estimated_proportions, real_proportions, device,
     # Move tensors to the configured device
     estimated_proportions = estimated_proportions.to(device)
     real_proportions = real_proportions.to(device)
-    # Forward pass
-    batch_size, real_proportions = class_proportions_list
-    outputs = teacher_out_prototypes
-    probabilities = nn.functional.softmax(outputs, dim=-1).reshape((batch_size, bag_size, -1))
-    avg_prob = torch.mean(probabilities, dim=1)
+    
+    # Calcular las probabilidades y la pérdida KL
+    probabilities = nn.functional.softmax(estimated_proportions, dim=-1)
+    avg_prob = torch.mean(probabilities, dim=0)
     avg_prob = torch.clamp(avg_prob, epsilon, 1 - epsilon)
-    loss = torch.sum(-probabilities * torch.log(avg_prob), dim=-1).mean()
+    
+    # Calcular la pérdida KL utilizando las proporciones del lote
+    loss = torch.sum(-real_proportions * torch.log(avg_prob), dim=-1).mean()
+    
     return loss
 
 
