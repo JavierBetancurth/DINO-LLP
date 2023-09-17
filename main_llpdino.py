@@ -35,9 +35,10 @@ import utils
 import vision_transformer as vits
 from vision_transformer import DINOHead
 
+
 # proportions
 from loss.kl_loss import compute_kl_loss_on_bagbatch
-from proportions_assignments import 
+from proportions_assignments.prototype_layer import Prototypes
 
 
 
