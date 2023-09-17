@@ -7,7 +7,7 @@ def compute_kl_loss_on_bagbatch(estimated_proportions, real_proportions, device,
     estimated_proportions = estimated_proportions.to(device)
     real_proportions = real_proportions.to(device)
     # Forward pass
-    batch_size, real_proportions = 
+    batch_size, real_proportions = class_proportions_list
     outputs = teacher_out_prototypes
     probabilities = nn.functional.softmax(outputs, dim=-1).reshape((batch_size, bag_size, -1))
     avg_prob = torch.mean(probabilities, dim=1)
