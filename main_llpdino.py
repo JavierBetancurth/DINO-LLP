@@ -157,7 +157,7 @@ def train_dino(args):
 
     # prueba datasets
     dataset = torchvision.datasets.CIFAR10(root=".", train=True,  transform=transform, download=True)
-    labels = train_dataset.targets
+    labels = dataset.targets
 
 
     
