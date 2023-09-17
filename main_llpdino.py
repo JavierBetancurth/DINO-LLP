@@ -334,7 +334,7 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
     class_proportions_list = []  # Lista para almacenar las proporciones de clase por lote
     
                         
-    for it, (images, _) in enumerate(metric_logger.log_every(data_loader, 10, header)):
+    for it, (images, labels) in enumerate(metric_logger.log_every(data_loader, 10, header)):
         
         # Calcular las proporciones de clase en el lote actual
         class_proportions = calculate_class_proportions_in_batch(labels)
