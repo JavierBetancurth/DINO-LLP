@@ -5,7 +5,7 @@ import torch.nn as nn
 def compute_kl_loss_on_bagbatch(estimated_proportions, real_proportions, device, epsilon=1e-8):
     for i in range(len(class_proportions_list)):
     real_proportions = class_proportions_list[i]  # Proporciones reales del lote actual
-    estimated_proportions = estimated_proportions_list[i]  # Proporciones estimadas del lote actual
+    # estimated_proportions = estimated_proportions_list[i]  # Proporciones estimadas del lote actual
         # Move tensors to the configured device
         estimated_proportions = estimated_proportions.to(device)
         real_proportions = real_proportions.to(device)
