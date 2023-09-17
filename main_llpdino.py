@@ -41,7 +41,6 @@ from loss.kl_loss import compute_kl_loss_on_bagbatch
 from proportions_assignments.prototype_layer import Prototypes
 
 
-
 torchvision_archs = sorted(name for name in torchvision_models.__dict__
     if name.islower() and not name.startswith("__")
     and callable(torchvision_models.__dict__[name]))
