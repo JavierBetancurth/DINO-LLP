@@ -23,6 +23,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 import torch
+import torchvision #J
 import torch.nn as nn
 import torch.distributed as dist
 import torch.backends.cudnn as cudnn
