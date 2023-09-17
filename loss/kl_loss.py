@@ -18,7 +18,7 @@ def compute_kl_loss_on_bagbatch(estimated_proportions, real_proportions, device,
     return loss
 
 
-    # ce_loss = torch.sum(-real_proportions * F.log_softmax(estimated_proportions), dim=-1)
-    # rce_loss = torch.sum(-estimated_proportions, dim=-1) * torch.log(real_proportions)
-    # loss2 = ce_loss + beta * rce_loss
+# ce_loss = torch.sum(-real_proportions * F.log_softmax(estimated_proportions), dim=-1)
+# rce_loss = torch.sum(-estimated_proportions, dim=-1) * torch.log(real_proportions)
+# loss2 = ce_loss + beta * rce_loss
                     
