@@ -318,7 +318,7 @@ def train_dino(args):
 
 # J
 def calculate_class_proportions_in_batch(labels):
-    class_counts = np.bincount(labels, minlength=len(cifar10_dataset.classes))
+    class_counts = np.bincount(labels, minlength=len(dataset.classes))
     class_proportions = class_counts / len(labels)
     return class_proportions
 
