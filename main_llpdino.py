@@ -150,7 +150,16 @@ def train_dino(args):
         args.local_crops_scale,
         args.local_crops_number,
     )
-    dataset = datasets.ImageFolder(args.data_path, transform=transform)
+    
+    # dataset = datasets.ImageFolder(args.data_path, transform=transform)
+
+
+    # prueba datasets
+    dataset = torchvision.datasets.CIFAR10(root=".", train=True,  transform=transform, download=True)
+    labels = train_dataset.targets
+
+
+    
     sampler = torch.utils.data.DistributedSampler(dataset, shuffle=True)
     data_loader = torch.utils.data.DataLoader(
         dataset,
