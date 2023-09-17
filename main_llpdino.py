@@ -90,7 +90,7 @@ def get_args_parser():
         help optimization for larger ViT architectures. 0 for disabling.""")
     parser.add_argument('--batch_size_per_gpu', default=64, type=int,
         help='Per-GPU batch-size : number of distinct images loaded on one GPU.')
-    parser.add_argument('--epochs', default=100, type=int, help='Number of epochs of training.')
+    parser.add_argument('--epochs', default=3, type=int, help='Number of epochs of training.')
     parser.add_argument('--freeze_last_layer', default=1, type=int, help="""Number of epochs
         during which we keep the output layer fixed. Typically doing so during
         the first epoch helps training. Try increasing this value if the loss does not decrease.""")
@@ -290,7 +290,7 @@ def train_dino(args):
         # ============ training one epoch of DINO ... ============
         train_stats = train_one_epoch(student, teacher, teacher_without_ddp, dino_loss,
             data_loader, optimizer, lr_schedule, wd_schedule, momentum_schedule,
-            epoch, fp16_scaler, dataset, args)
+            epoch, fp16_scaler, dataset, args)   # se agrega la variable dataset
 
         # ============ writing logs ... ============
         save_dict = {
@@ -325,13 +325,13 @@ def calculate_class_proportions_in_batch(labels, dataset):
 
 def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loader,
                     optimizer, lr_schedule, wd_schedule, momentum_schedule,epoch,
-                    fp16_scaler, dataset, args):
+                    fp16_scaler, dataset, args):    # se agrega la variable dataset
     metric_logger = utils.MetricLogger(delimiter="  ")
     header = 'Epoch: [{}/{}]'.format(epoch, args.epochs)
 
 
                         
-    class_proportions_list = []  # Lista para almacenar las proporciones de clase por lote
+    class_proportions_list = []  # lista para almacenar las proporciones de clase por lote
     
                         
     for it, (images, labels) in enumerate(metric_logger.log_every(data_loader, 10, header)):
