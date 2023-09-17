@@ -316,12 +316,30 @@ def train_dino(args):
     print('Training time {}'.format(total_time_str))
 
 
+# J
+def calculate_class_proportions_in_batch(labels):
+    class_counts = np.bincount(labels, minlength=len(cifar10_dataset.classes))
+    class_proportions = class_counts / len(labels)
+    return class_proportions
+
+
 def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loader,
                     optimizer, lr_schedule, wd_schedule, momentum_schedule,epoch,
                     fp16_scaler, args):
     metric_logger = utils.MetricLogger(delimiter="  ")
     header = 'Epoch: [{}/{}]'.format(epoch, args.epochs)
+
+
+                        
+    class_proportions_list = []  # Lista para almacenar las proporciones de clase por lote
+    
+                        
     for it, (images, _) in enumerate(metric_logger.log_every(data_loader, 10, header)):
+        
+        # Calcular las proporciones de clase en el lote actual
+        class_proportions = calculate_class_proportions_in_batch(labels)
+        class_proportions_list.append(class_proportions)
+        
         # update weight decay and learning rate according to their schedule
         it = len(data_loader) * epoch + it  # global training iteration
         for i, param_group in enumerate(optimizer.param_groups):
@@ -383,6 +401,9 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
     metric_logger.synchronize_between_processes()
     print("Averaged stats:", metric_logger)
     return {k: meter.global_avg for k, meter in metric_logger.meters.items()}
+    
+    for i, proportions in enumerate(class_proportions_list):
+        print(f"Proporciones de clase en lote {i + 1}: {proportions}")
 
 
 class DINOLoss(nn.Module):
