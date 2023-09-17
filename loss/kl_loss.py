@@ -2,12 +2,11 @@ import torch
 import torch.nn as nn
 
 # Label proportions-based loss with asymmetric cross entropy
-def compute_kl_loss_on_bagbatch(estimated_proportions, class_proportions_list, device_ids=[args.gpu], epsilon=1e-8):
+def compute_kl_loss_on_bagbatch(estimated_proportions, class_proportions_list, epsilon=1e-8):
     for i in range(len(class_proportions_list)):
         real_proportions = class_proportions_list[i]  # Proporciones reales del lote actual
-        # Move tensors to the configured device
-        estimated_proportions = estimated_proportions.to(device)
-        real_proportions = real_proportions.to(device)
+        # Move tensors to gpu
+        estimated_proportions, real_proportions = estimated_proportions.cuda(), real_proportions.cuda()  
             
         # Calcular las probabilidades y la pérdida KL
         probabilities = nn.functional.softmax(estimated_proportions, dim=-1)
