@@ -317,7 +317,7 @@ def train_dino(args):
 
 
 # J
-def calculate_class_proportions_in_batch(labels):
+def calculate_class_proportions_in_batch(labels, dataset):
     class_counts = np.bincount(labels, minlength=len(dataset.classes))
     class_proportions = class_counts / len(labels)
     return class_proportions
@@ -337,7 +337,7 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
     for it, (images, labels) in enumerate(metric_logger.log_every(data_loader, 10, header)):
         
         # Calcular las proporciones de clase en el lote actual
-        class_proportions = calculate_class_proportions_in_batch(labels)
+        class_proportions = calculate_class_proportions_in_batch(labels, dataset)
         class_proportions_list.append(class_proportions)
         
         # update weight decay and learning rate according to their schedule
