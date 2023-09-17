@@ -138,7 +138,7 @@ def get_args_parser():
     return parser
 
 
-def train_dino(args, dataset):
+def train_dino(args):
     utils.init_distributed_mode(args)
     utils.fix_random_seeds(args.seed)
     print("git:\n  {}\n".format(utils.get_sha()))
