@@ -359,7 +359,7 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
         with torch.cuda.amp.autocast(fp16_scaler is not None):
             teacher_output = teacher(images[:2])  # only the 2 global views pass through the teacher
             student_output = student(images)
-            loss1 = dino_loss(student_output, teacher_output, epoch)
+            loss = dino_loss(student_output, teacher_output, epoch)
 
             
             # Paso a través de la capa de Prototipos
@@ -371,7 +371,7 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
             # loss = compute_kl_loss_on_bagbatch(prototypes_output, class_proportions_list, epsilon=1e-8)
 
             
-            # total_loss = loss1 + loss2
+            # loss = loss1 + loss2
 
 
         if not math.isfinite(loss.item()):
