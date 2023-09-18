@@ -363,18 +363,13 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
 
             
             # Paso a través de la capa de Prototipos
-            # Definir la dimensión de salida deseada para la capa de Prototipos (en este caso, 10 clases)
-            output_dim = 10
-            
-            # Crear una instancia de Prototypes
-            prototypes_layer = Prototypes(output_dim)
-            
+                               
             # Asegurarse de que student_output sea un tensor de PyTorch si no lo es
             student_output = torch.tensor(student_output, dtype=torch.float32)
-            
-            # Paso a través de la capa de Prototipos
-            prototypes_output = prototypes_layer(student_output)
 
+            # Crear una instancia de Prototypes
+            prototypes_output = Prototypes(student_output, output_dim = 10) # Definir la dimensión de salida deseada para la capa de Prototipos (en este caso, 10 clases)
+           
             # Calcular la pérdida KL entre las salidas de Prototipos y las proporciones reales del lote
             loss = compute_kl_loss_on_bagbatch(prototypes_output, class_proportions_list, epsilon=1e-8)
 
