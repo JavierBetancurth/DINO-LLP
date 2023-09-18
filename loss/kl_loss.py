@@ -3,7 +3,8 @@ import torch.nn as nn
 
 # Label proportions-based loss with asymmetric cross entropy
 def compute_kl_loss_on_bagbatch(estimated_proportions, class_proportions_list, epsilon=1e-8):
-    estimated_proportions = torch.tensor(estimated_proportions, dtype=torch.float32)
+    estimated_proportions = estimated_proportions.cuda().requires_grad_()
+    # estimated_proportions = torch.tensor(estimated_proportions, dtype=torch.float32)
     
     for i in range(len(class_proportions_list)):
         real_proportions = class_proportions_list[i]  # Proporciones reales del lote actual
