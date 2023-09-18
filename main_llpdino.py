@@ -364,6 +364,8 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
             
             # Paso a través de la capa de Prototipos
 
+            output_dim = 65536
+
             # Crear una instancia de Prototypes nmb_prototypes
             nmb_prototypes = 10  # O la cantidad deseada de clases
             prototypes_layer = Prototypes(output_dim, nmb_prototypes)
