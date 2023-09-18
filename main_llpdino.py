@@ -370,6 +370,9 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
             nmb_prototypes = 10  # O la cantidad deseada de clases
             prototypes_layer = Prototypes(output_dim, nmb_prototypes)
 
+            # Mover la capa de Prototipos a la GPU si está disponible
+            prototypes_layer = prototypes_layer.cuda()
+
             # Asegurarse de que student_output sea un tensor de PyTorch si no lo es
             student_output = torch.tensor(student_output, dtype=torch.float32)
 
