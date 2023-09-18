@@ -359,16 +359,24 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
         with torch.cuda.amp.autocast(fp16_scaler is not None):
             teacher_output = teacher(images[:2])  # only the 2 global views pass through the teacher
             student_output = student(images)
-            loss = dino_loss(student_output, teacher_output, epoch)
+            # loss = dino_loss(student_output, teacher_output, epoch)
 
             
             # Paso a través de la capa de Prototipos
-            # output_dim = 10
-            # prototypes_layer = Prototypes(output_dim)  # Crear una instancia de Prototypes
-            # prototypes_output = prototypes_layer(student_output)  # Llamar a la instancia con student_output como argumento
+            # Definir la dimensión de salida deseada para la capa de Prototipos (en este caso, 10 clases)
+            output_dim = 10
+            
+            # Crear una instancia de Prototypes
+            prototypes_layer = Prototypes(output_dim)
+            
+            # Asegurarse de que student_output sea un tensor de PyTorch si no lo es
+            student_output = torch.tensor(student_output, dtype=torch.float32)
+            
+            # Paso a través de la capa de Prototipos
+            prototypes_output = prototypes_layer(student_output)
 
             # Calcular la pérdida KL entre las salidas de Prototipos y las proporciones reales del lote
-            # loss = compute_kl_loss_on_bagbatch(prototypes_output, class_proportions_list, epsilon=1e-8)
+            loss = compute_kl_loss_on_bagbatch(prototypes_output, class_proportions_list, epsilon=1e-8)
 
             
             # loss = loss1 + loss2
