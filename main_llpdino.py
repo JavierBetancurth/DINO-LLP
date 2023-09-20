@@ -374,7 +374,8 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
             prototypes_layer = prototypes_layer.cuda()
 
             # Asegurarse de que student_output sea un tensor de PyTorch si no lo es
-            student_output = torch.tensor(student_output, dtype=torch.float32)
+            # student_output = torch.tensor(student_output, dtype=torch.float32)
+            student_output.clone().detach().requires_grad_(True)
 
             # Paso a través de la capa de Prototipos
             prototypes_output = prototypes_layer(student_output)
