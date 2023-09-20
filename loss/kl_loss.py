@@ -11,8 +11,8 @@ def compute_kl_loss_on_bagbatch(estimated_proportions, class_proportions_list, e
     for i in range(len(class_proportions_list)):
         real_proportions = class_proportions_list[i]  # Proporciones reales del lote actual
 
-        real_proportions.clone().detach().requires_grad_(True)
-        # real_proportions = torch.tensor(real_proportions, dtype=torch.float32).cuda()
+        #real_proportions.clone().detach().requires_grad_(True)
+        real_proportions = torch.tensor(real_proportions, dtype=torch.float32).cuda()
         
         # Calcular las probabilidades y la pérdida KL
         probabilities = nn.functional.softmax(estimated_proportions, dim=-1)
