@@ -379,11 +379,12 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
 
             # Paso a través de la capa de Prototipos
             prototypes_output = prototypes_layer(student_output)
-            print(prototypes_output)
+            
+            # print(prototypes_output)
             # Calcular la pérdida KL entre las salidas de Prototipos y las proporciones reales del lote
             loss2 = compute_kl_loss_on_bagbatch(prototypes_output, class_proportions_list, epsilon=1e-8)
             
-            print(loss1, loss2)
+            # print(loss1, loss2)
             loss = loss1 + loss2
 
 
