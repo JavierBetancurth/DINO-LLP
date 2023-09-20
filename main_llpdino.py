@@ -128,7 +128,7 @@ def get_args_parser():
        help="regularization parameter for Sinkhorn-Knopp algorithm")
     parser.add_argument("--sinkhorn_iterations", default=3, type=int,
        help="number of iterations in Sinkhorn-Knopp algorithm")
-    parser.add_argument("--nmb_prototypes", default=20, type=int,
+    parser.add_argument("--nmb_prototypes", default=10, type=int,
        help="number of prototypes")
 
     # Misc
@@ -367,8 +367,8 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
             output_dim = 65536
 
             # Crear una instancia de Prototypes nmb_prototypes
-            nmb_prototypes = 10  # O la cantidad deseada de clases
-            prototypes_layer = Prototypes(output_dim, nmb_prototypes)
+            # nmb_prototypes = 10  # O la cantidad deseada de clases
+            prototypes_layer = Prototypes(output_dim, args.nmb_prototypes)
 
             # Mover la capa de Prototipos a la GPU si está disponible
             prototypes_layer = prototypes_layer.cuda()
@@ -378,11 +378,11 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
 
             # Paso a través de la capa de Prototipos
             prototypes_output = prototypes_layer(student_output)
-           
+            print(prototypes_output)
             # Calcular la pérdida KL entre las salidas de Prototipos y las proporciones reales del lote
             loss2 = compute_kl_loss_on_bagbatch(prototypes_output, class_proportions_list, epsilon=1e-8)
-
             
+            print(loss1, loss2)
             loss = loss1 + loss2
 
 
