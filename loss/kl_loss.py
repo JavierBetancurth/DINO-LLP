@@ -7,7 +7,6 @@ def compute_kl_loss_on_bagbatch(estimated_proportions, class_proportions_list, e
     # estimated_proportions = estimated_proportions.cuda().requires_grad_()
     # estimated_proportions = torch.tensor(estimated_proportions, dtype=torch.float32)
 
-    print(estimated_proportions)
     for i in range(len(class_proportions_list)):
         real_proportions = class_proportions_list[i]  # Proporciones reales del lote actual
 
