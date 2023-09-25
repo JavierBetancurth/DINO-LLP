@@ -131,6 +131,10 @@ def get_args_parser():
     parser.add_argument("--nmb_prototypes", default=10, type=int,
        help="number of prototypes")
 
+    # losses parameters
+    parser.add_argument('--alpha', type=float, default=0.8, help="""alpha parameter defined to 
+        weight between dino and kl losses.""")
+
     # Misc
     parser.add_argument('--data_path', default='/path/to/imagenet/train/', type=str,
         help='Please specify path to the ImageNet training data.')
@@ -385,7 +389,9 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
             loss2 = compute_kl_loss_on_bagbatch(prototypes_output, class_proportions_list, epsilon=1e-8)
             
             # print(loss1, loss2)
-            loss = loss1 + loss2
+            # loss = loss1 + loss2
+            # Combine the losses using the alpha parameter
+            loss = alpha * loss1 + (1 - alpha) * loss2
 
 
         if not math.isfinite(loss.item()):
