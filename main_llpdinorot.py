@@ -399,6 +399,12 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
 
             # Paso a través de la capa de Prototipos
             prototypes_output = prototypes_layer(student_output)
+            
+            estimated_proportions = prototypes_output
+
+            
+            for i in range(len(class_proportions_list)):
+                real_proportions = class_proportions_list[i]  # Proporciones reales del lote actual
 
 
             loss = dino_loss(student_output, teacher_output, real_proportions, estimated_proportions, alpha=0.5, beta=0.5, epoch)
