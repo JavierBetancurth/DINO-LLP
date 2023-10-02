@@ -414,7 +414,7 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
             loss2 = compute_kl_loss_on_bagbatch2(prototypes_output, class_proportions_list, epsilon=1e-8, beta=1.0)
             
             # print(loss1, loss2)
-            loss = loss1 + 0.1 * loss2
+            loss = loss1 + loss2
             # Combine the losses using the alpha parameter
             # loss = alpha * loss1 + (1 - alpha) * loss2
 
