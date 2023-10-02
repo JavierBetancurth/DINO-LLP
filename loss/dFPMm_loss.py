@@ -102,7 +102,7 @@ class DINOLossdFPMm(nn.Module):
                 probabilities = nn.functional.softmax(estimated_proportions, dim=-1)
                 avg_prob = torch.mean(probabilities, dim=0)
                 avg_prob = torch.clamp(avg_prob, epsilon, 1 - epsilon)
-                ce_loss = torch.sum(-real_proportions * torch.log(avg_prob), dim=-1)
+                ce_loss = torch.sum(-real_proportions * F.log_softmax(avg_prob), dim=-1)
                 rce_loss = torch.sum(-avg_prob, dim=-1) * torch.log(real_proportions)
                 loss2 = ce_loss + beta * rce_loss
 
