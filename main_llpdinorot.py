@@ -37,7 +37,7 @@ from vision_transformer import DINOHead
 
 # loss function
 # dFPMm loss
-from loss.dFPMm_loss import dFPMm_loss
+from loss.dFPMm_loss import DINOLossdFPMm
 # KL loss
 from loss.kl_loss import compute_kl_loss_on_bagbatch
 
@@ -244,7 +244,7 @@ def train_dino(args):
     print(f"Student and Teacher are built: they are both {args.arch} network.")
 
     # ============ preparing loss ... ============
-    dino_loss = DINOLoss(
+    dino_loss1 = DINOLoss(
         args.out_dim,
         args.local_crops_number + 2,  # total number of crops = 2 global crops + local_crops_number
         args.warmup_teacher_temp,
@@ -252,6 +252,20 @@ def train_dino(args):
         args.warmup_teacher_temp_epochs,
         args.epochs,
     ).cuda()
+    
+
+    dino_loss = DINOLossdFPMm(
+            args.out_dim,
+            args.local_crops_number + 2,  # total number of crops = 2 global crops + local_crops_number
+            args.warmup_teacher_temp,
+            args.teacher_temp,
+            args.warmup_teacher_temp_epochs,
+            args.epochs,
+        ).cuda()
+
+
+
+    
 
     # ============ preparing optimizer ... ============
     params_groups = utils.get_params_groups(student)
@@ -367,7 +381,7 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
         with torch.cuda.amp.autocast(fp16_scaler is not None):
             teacher_output = teacher(images[:2])  # only the 2 global views pass through the teacher
             student_output = student(images)
-            loss1 = dino_loss(student_output, teacher_output, epoch)
+            # loss1 = dino_loss(student_output, teacher_output, epoch)
 
             
             # Paso a través de la capa de Prototipos
@@ -387,15 +401,19 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
 
             # Paso a través de la capa de Prototipos
             prototypes_output = prototypes_layer(student_output)
-            
+
+
+            loss = dino_loss(student_output, teacher_output, epoch)
+
+        
             # print(prototypes_output)
             # Calcular la pérdida KL entre las salidas de Prototipos y las proporciones reales del lote
-            loss2 = compute_kl_loss_on_bagbatch(prototypes_output, class_proportions_list, epsilon=1e-8)
+            # loss2 = compute_kl_loss_on_bagbatch(prototypes_output, class_proportions_list, epsilon=1e-8)
             
             # print(loss1, loss2)
             # loss = loss1 + loss2
             # Combine the losses using the alpha parameter
-            loss = alpha * loss1 + (1 - alpha) * loss2
+            # loss = alpha * loss1 + (1 - alpha) * loss2
 
 
         if not math.isfinite(loss.item()):
