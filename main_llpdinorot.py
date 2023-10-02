@@ -407,7 +407,7 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
                 real_proportions = class_proportions_list[i]  # Proporciones reales del lote actual
 
 
-            loss = dino_loss(student_output, teacher_output, real_proportions, estimated_proportions, alpha=0.5, beta=0.5, epoch)
+            loss = dino_loss(student_output, teacher_output, real_proportions, estimated_proportions, epoch, alpha=0.5, beta=0.5)
 
                 
             # print(prototypes_output)
