@@ -30,6 +30,9 @@ def compute_kl_loss_on_bagbatch2(estimated_proportions, class_proportions_list, 
     # estimated_proportions = estimated_proportions.cuda().requires_grad_()
     # estimated_proportions = torch.tensor(estimated_proportions, dtype=torch.float32)
 
+    total_loss = 0
+    n_loss_terms = 0
+
     for i in range(len(class_proportions_list)):
         real_proportions = class_proportions_list[i]  # Proporciones reales del lote actual
 
@@ -42,11 +45,14 @@ def compute_kl_loss_on_bagbatch2(estimated_proportions, class_proportions_list, 
         avg_prob = torch.clamp(avg_prob, epsilon, 1 - epsilon)
 
         # Calcular la pérdida KL utilizando las proporciones del lote
-        ce_loss = torch.sum(-real_proportions * torch.log(avg_prob), dim=-1).mean
-        rce_loss = torch.sum(-avg_prob * torch.log(real_proportions), dim=-1).mean
+        ce_loss = torch.sum(-real_proportions * torch.log(avg_prob), dim=-1)
+        rce_loss = torch.sum(-avg_prob * torch.log(real_proportions), dim=-1)
         loss = ce_loss + beta * rce_loss
-        
-    return loss
+
+        total_loss += loss.mean()
+        n_loss_terms += 1
+    total_loss /= n_loss_terms    
+    return total_loss
         
 
 # ce_loss = torch.sum(-real_proportions * F.log_softmax(estimated_proportions), dim=-1)
