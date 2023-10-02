@@ -401,9 +401,9 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
             prototypes_output = prototypes_layer(student_output)
 
 
-            loss = dino_loss(student_output, teacher_output, epoch)
+            loss = dino_loss(student_output, teacher_output, real_proportions, estimated_proportions, alpha=0.5, beta=0.5, epoch)
 
-        
+                
             # print(prototypes_output)
             # Calcular la pérdida KL entre las salidas de Prototipos y las proporciones reales del lote
             # loss2 = compute_kl_loss_on_bagbatch(prototypes_output, class_proportions_list, epsilon=1e-8)
