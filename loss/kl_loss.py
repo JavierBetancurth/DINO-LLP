@@ -25,7 +25,7 @@ def compute_kl_loss_on_bagbatch(estimated_proportions, class_proportions_list, e
 
 
 # Label proportions-based loss with symmetric cross entropy
-def compute_kl_loss_on_bagbatch2(estimated_proportions, class_proportions_list, epsilon=1e-8, beta=1):
+def compute_kl_loss_on_bagbatch2(estimated_proportions, class_proportions_list, epsilon=1e-8, beta=1.0):
     estimated_proportions.clone().detach().requires_grad_(True) 
     # estimated_proportions = estimated_proportions.cuda().requires_grad_()
     # estimated_proportions = torch.tensor(estimated_proportions, dtype=torch.float32)
