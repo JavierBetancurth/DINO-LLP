@@ -99,8 +99,11 @@ class DINOLossdFPMm(nn.Module):
                 loss1 = torch.sum(-q * F.log_softmax(student_out[v], dim=-1), dim=-1)
 
                 # Label proportions-based loss with symmetric cross entropy
-                ce_loss = torch.sum(-real_proportions * F.log_softmax(estimated_proportions), dim=-1)
-                rce_loss = torch.sum(-estimated_proportions, dim=-1) * torch.log(real_proportions)
+                probabilities = nn.functional.softmax(estimated_proportions, dim=-1)
+                avg_prob = torch.mean(probabilities, dim=0)
+                avg_prob = torch.clamp(avg_prob, epsilon, 1 - epsilon)
+                ce_loss = torch.sum(-real_proportions * F.log_softmax(avg_prob), dim=-1)
+                rce_loss = torch.sum(-avg_prob, dim=-1) * torch.log(real_proportions)
                 loss2 = ce_loss + beta * rce_loss
 
                 # Combine the losses using the alpha parameter
