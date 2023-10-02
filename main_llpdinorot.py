@@ -38,8 +38,10 @@ from vision_transformer import DINOHead
 # loss function
 # dFPMm loss
 from loss.dFPMm_loss import DINOLossdFPMm
-# KL loss
+# KL loss (asymmetric cross entropy)
 from loss.kl_loss import compute_kl_loss_on_bagbatch
+# KL loss (symmetric cross entropy)
+from loss.kl_loss import compute_kl_loss_on_bagbatch2
 
 # proportions
 from proportions_assignments.prototypes_layer import Prototypes
