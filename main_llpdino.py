@@ -391,7 +391,7 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
             # print(loss1, loss2)
             # loss = loss1 + loss2
             # Combine the losses using the alpha parameter
-            loss = alpha * loss1 + (1 - alpha) * loss2
+            loss = args.alpha * loss1 + (1 - args.alpha) * loss2
 
 
         if not math.isfinite(loss.item()):
