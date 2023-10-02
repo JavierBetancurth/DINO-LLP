@@ -244,7 +244,7 @@ def train_dino(args):
     print(f"Student and Teacher are built: they are both {args.arch} network.")
 
     # ============ preparing loss ... ============
-    dino_loss1 = DINOLoss(
+    dino_loss_NO = DINOLoss(
         args.out_dim,
         args.local_crops_number + 2,  # total number of crops = 2 global crops + local_crops_number
         args.warmup_teacher_temp,
@@ -264,8 +264,6 @@ def train_dino(args):
         ).cuda()
 
 
-
-    
 
     # ============ preparing optimizer ... ============
     params_groups = utils.get_params_groups(student)
