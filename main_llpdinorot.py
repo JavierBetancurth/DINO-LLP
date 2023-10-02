@@ -244,7 +244,7 @@ def train_dino(args):
     print(f"Student and Teacher are built: they are both {args.arch} network.")
 
     # ============ preparing loss ... ============
-    dino_loss_NO = DINOLoss(
+    dino_loss = DINOLoss(
         args.out_dim,
         args.local_crops_number + 2,  # total number of crops = 2 global crops + local_crops_number
         args.warmup_teacher_temp,
@@ -254,7 +254,7 @@ def train_dino(args):
     ).cuda()
     
 
-    dino_loss = DINOLossdFPMm(
+    dino_loss_NO = DINOLossdFPMm(
             args.out_dim,
             args.local_crops_number + 2,  # total number of crops = 2 global crops + local_crops_number
             args.warmup_teacher_temp,
@@ -378,7 +378,7 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
         with torch.cuda.amp.autocast(fp16_scaler is not None):
             teacher_output = teacher(images[:2])  # only the 2 global views pass through the teacher
             student_output = student(images)
-            # loss1 = dino_loss(student_output, teacher_output, epoch)
+            loss1 = dino_loss(student_output, teacher_output, epoch)
 
             
             # Paso a través de la capa de Prototipos
@@ -399,20 +399,20 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
             # Paso a través de la capa de Prototipos
             prototypes_output = prototypes_layer(student_output)
             
-            estimated_proportions = prototypes_output
+            # estimated_proportions = prototypes_output
             
-            for i in range(len(class_proportions_list)):
-                real_proportions = class_proportions_list[i]  # Proporciones reales del lote actual
+            # for i in range(len(class_proportions_list)):
+                # real_proportions = class_proportions_list[i]  # Proporciones reales del lote actual
 
-                loss = dino_loss(student_output, teacher_output, real_proportions, estimated_proportions, epoch, alpha=0.5, beta=0.5)
+                # loss = dino_loss(student_output, teacher_output, real_proportions, estimated_proportions, epoch, alpha=0.5, beta=0.5)
 
                 
             # print(prototypes_output)
-            # Calcular la pérdida KL entre las salidas de Prototipos y las proporciones reales del lote
-            # loss2 = compute_kl_loss_on_bagbatch(prototypes_output, class_proportions_list, epsilon=1e-8)
+            Calcular la pérdida KL entre las salidas de Prototipos y las proporciones reales del lote
+            loss2 = compute_kl_loss_on_bagbatch2(prototypes_output, class_proportions_list, epsilon=1e-8, beta=1)
             
             # print(loss1, loss2)
-            # loss = loss1 + loss2
+            loss = loss1 + 0.1 * loss2
             # Combine the losses using the alpha parameter
             # loss = alpha * loss1 + (1 - alpha) * loss2
 
