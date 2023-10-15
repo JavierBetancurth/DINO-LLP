@@ -116,3 +116,49 @@ class DataAugmentationDINO(object):
         output["offsets"] = ()
 
         return output
+
+
+class DataAugmentationCrOC(object):
+    def __init__(self, global_crops_scale):
+        color_jitter = transforms.Compose([
+            transforms.RandomApply(
+                [transforms.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.2, hue=0.1)],
+                p=0.8
+            ),
+            transforms.RandomGrayscale(p=0.2),
+        ])
+        normalize = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
+        ])
+
+        # Spatial transformation
+        self.spatial_transfo = MyCompose([
+            RandomResizedCropWithPos(224, scale=global_crops_scale, interpolation=transforms.InterpolationMode.BICUBIC),
+            MyComposeInner([RandomHorizontalFlipWithFlipBool(p=0.5)]),
+        ])
+
+        # Color transformations
+        self.color_transfo1 = transforms.Compose([
+            color_jitter,
+            utils.GaussianBlur(1.0),
+            normalize,
+        ])
+        self.color_transfo2 = transforms.Compose([
+            color_jitter,
+            utils.GaussianBlur(0.1),
+            utils.Solarization(0.2),
+            normalize,
+        ])
+
+    def __call__(self, image):
+        # Apply the spatial transformations
+        view_1_, pos_1 = self.spatial_transfo(image)
+        view_2_, pos_2 = self.spatial_transfo(image)
+
+        # The teacher's views share the same color transformation
+        view_1, view_2 = self.color_transfo1(view_1_), self.color_transfo2(view_2_)
+        crops = 2 * [view_1, view_2]
+        crops_pos = 2 * [pos_1, pos_2]
+        
+        return crops, crops_pos
