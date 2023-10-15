@@ -46,6 +46,9 @@ from loss.kl_loss import compute_kl_loss_on_bagbatch2
 # proportions
 from proportions_assignments.prototypes_layer import Prototypes
 
+# agmentations
+from data.augmentations import DataAugmentationCrOC
+
 
 torchvision_archs = sorted(name for name in torchvision_models.__dict__
     if name.islower() and not name.startswith("__")
@@ -224,8 +227,23 @@ def train_dino(args):
         teacher,
         DINOHead(embed_dim, args.out_dim, args.use_bn_in_head),
     )
+
+    clustering = Clustering(
+        args,
+        n_tokens=args.n_tokens,
+        sinkhorn_lambda=args.sinkhorn_lambda,
+        sinkhorn_iterations=args.sinkhorn_iterations,
+        student_temp=args.student_temp,
+        uniform_marginals=args.uniform_marginals,
+        marginals_temp_r=args.marginals_temp_r,
+        marginals_temp_c=args.marginals_temp_c,
+        pos_alpha=args.pos_alpha,
+        n_heads=teacher.backbone.num_heads,
+    )
+    
     # move networks to gpu
     student, teacher = student.cuda(), teacher.cuda()
+    
     # synchronize batch norms (if any)
     if utils.has_batchnorms(student):
         student = nn.SyncBatchNorm.convert_sync_batchnorm(student)
@@ -255,17 +273,6 @@ def train_dino(args):
         args.epochs,
     ).cuda()
     
-
-    dino_loss_NO = DINOLossdFPMm(
-            args.out_dim,
-            args.local_crops_number + 2,  # total number of crops = 2 global crops + local_crops_number
-            args.warmup_teacher_temp,
-            args.teacher_temp,
-            args.warmup_teacher_temp_epochs,
-            args.epochs,
-        ).cuda()
-
-
     # ============ preparing optimizer ... ============
     params_groups = utils.get_params_groups(student)
     if args.optimizer == "adamw":
@@ -342,7 +349,6 @@ def train_dino(args):
     total_time_str = str(datetime.timedelta(seconds=int(total_time)))
     print('Training time {}'.format(total_time_str))
 
-
 # J
 def calculate_class_proportions_in_batch(labels, dataset):
     class_counts = np.bincount(labels, minlength=len(dataset.classes))
@@ -351,21 +357,28 @@ def calculate_class_proportions_in_batch(labels, dataset):
 
 
 def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loader,
-                    optimizer, lr_schedule, wd_schedule, momentum_schedule,epoch,
-                    fp16_scaler, dataset, args):    # se agrega la variable dataset
+                    optimizer, lr_schedule, wd_schedule, momentum_schedule, epoch,
+                    fp16_scaler, dataset, clustering, args):    # se agrega la variable dataset
     metric_logger = utils.MetricLogger(delimiter="  ")
     header = 'Epoch: [{}/{}]'.format(epoch, args.epochs)
 
-
-                        
+    # J                    
     class_proportions_list = []  # lista para almacenar las proporciones de clase por lote
     
                         
     for it, (images, labels) in enumerate(metric_logger.log_every(data_loader, 10, header)):
         
+        # J
         # Calcular las proporciones de clase en el lote actual
         class_proportions = calculate_class_proportions_in_batch(labels, dataset)
         class_proportions_list.append(class_proportions)
+
+        # From Cross-View Online Clustering for Dense Visual Representation Learning
+        # update weight decay and learning rate according to their schedule
+        crop_pos = None
+        if isinstance(images[0], list):
+            images, crop_pos = images
+            crop_pos = [p.cuda(non_blocking=True) for p in crop_pos]
         
         # update weight decay and learning rate according to their schedule
         it = len(data_loader) * epoch + it  # global training iteration
@@ -376,11 +389,42 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
 
         # move images to gpu
         images = [im.cuda(non_blocking=True) for im in images]
+        
         # teacher and student forward passes + compute dino loss
         with torch.cuda.amp.autocast(fp16_scaler is not None):
-            teacher_output = teacher(images[:2])  # only the 2 global views pass through the teacher
-            student_output = student(images)
-            loss1 = dino_loss(student_output, teacher_output, epoch)
+            # From Cross-View Online Clustering for Dense Visual Representation Learning
+            with torch.no_grad():
+                # get the teacher tokens
+                teacher_output, teacher_last_tokens, teacher_qkv_tokens = teacher(images[:2]) # only the 2 global views pass through the teacher
+                
+                # Compute the teacher's assignments and centroids
+                teacher_centroids, valid_centroids, assignments, region_count = clustering.\
+                    compute_teacher_centroids(teacher_last_tokens, teacher_qkv_tokens, crop_pos)
+
+            # get the student tokens
+            student_output, student_last_tokens, _ = student(images[2:])
+
+            # compute the student's assignments and centroids
+            student_centroids = clustering.compute_student_centroids(assignments, student_last_tokens,
+                                                                     valid_centroids)
+
+            # project the centroids
+            with torch.no_grad():
+                teacher_centroids = teacher(torch.cat(teacher_centroids), head_only=True)
+            student_centroids = student(torch.cat(student_centroids), head_only=True)
+
+            # get the [CLS] loss
+            d_loss, s_loss = croc_loss(student_output, teacher_output, epoch, student_centroids, teacher_centroids)
+
+            # combine the losses
+            loss = d_loss + alpha_s * s_loss
+
+
+            # DINO 
+            # teacher_output = teacher(images[:2])  
+            # student_output = student(images)
+            # loss1 = dino_loss(student_output, teacher_output, epoch)
+            
 
             
             # Paso a través de la capa de Prototipos
@@ -584,6 +628,263 @@ class DataAugmentationDINO(object):
         for _ in range(self.local_crops_number):
             crops.append(self.local_transfo(image))
         return crops
+
+# From Cross-View Online Clustering for Dense Visual Representation Learning
+class Clustering:
+    def __init__(self, args, n_tokens, sinkhorn_lambda, sinkhorn_iterations=5, student_temp=1., uniform_marginals=True,
+                 marginals_temp_r=2.0, marginals_temp_c=2.0, pos_alpha=4., n_heads=6):
+        self.patch_size = args.patch_size
+        self.n_tokens = n_tokens
+        self.student_temp = student_temp
+        self.pos_alpha = pos_alpha
+        self.sinkhorn_lambda = sinkhorn_lambda
+        self.sinkhorn_iterations = sinkhorn_iterations
+        self.uniform_marginals = uniform_marginals
+        self.marginals_temp_r = marginals_temp_r
+        self.marginals_temp_c = marginals_temp_c
+        self.n_heads = n_heads
+        self.n_centroids_max = args.n_centroids_max
+
+    @torch.no_grad()
+    def sinkhorn(self, M, r, c):
+        P = torch.exp(- self.sinkhorn_lambda * M)
+        P /= reduce(P, 'b n k -> b 1 1', reduction='sum')
+
+        # Iterate over the sinkhorn algorithm
+        for _ in range(self.sinkhorn_iterations):
+            u = reduce(P, 'b n k -> b n 1', reduction='sum')
+            P *= (r / u)
+            u = reduce(P, 'b n k -> b 1 k', reduction='sum')
+            P *= (c / u)
+        P = torch.nan_to_num(P, nan=1e-8)
+        return P, torch.sum(P * M, dim=[1, 2])
+
+    def compute_r_marginals(self, teacher_tokens, teacher_cls_tokens, uniform_marginals):
+        m, b, n, d = teacher_tokens.shape
+        if uniform_marginals:
+            n = m * n
+            r = (torch.ones([b, n]) / n).cuda()
+        else:
+            r = torch.einsum('m b n d, m b d -> m b n', teacher_tokens, teacher_cls_tokens)
+            r = rearrange(r, 'm b n -> b (m n)')
+        return r
+
+    def compute_c_marginals(self, r, indices, uniform_marginals, temp_r=1., temp_c=1.):
+        b, n = r.shape
+        k = indices.shape[1]
+        if uniform_marginals:
+            c = (torch.ones([b, 1, k]) / k).cuda()
+            r = r[:, :, None]
+        else:
+            c = torch.einsum('b n, b k n -> b k', r, indices)
+            c = rearrange(c / temp_c, 'b k -> b 1 k')
+            c = F.softmax(c, dim=-1)
+            r = rearrange(r, 'b n -> b n 1')
+            r = F.softmax(r / temp_r, dim=1)
+        return torch.nan_to_num(r), torch.nan_to_num(c)
+
+    def compute_student_centroids(self, assignments, student_last_tokens, valid_centroids):
+        # Compute the average norm of the centroids
+        cls_norm = student_last_tokens[:, 0, :].norm(dim=-1).mean()
+
+        # Normalize the tokens
+        student_last_tokens = rearrange(student_last_tokens[:, 1:], '(m b) n d -> m b n d', m=2)
+
+        # Compute the student centroids using the teacher assignments
+        student_last_tokens = repeat(student_last_tokens, 'm b n d -> m (b h) n d', h=self.n_heads)
+        centroids = torch.einsum('m b n d, m b n k -> m b k d', student_last_tokens, assignments)
+        centroids = rearrange(centroids, 'm b k d -> m (b k) d')
+
+        # Split the centroids view-wise
+        centroids_v1, centroids_v2 = centroids.unbind()
+        centroids_v1, centroids_v2 = centroids_v1[valid_centroids], centroids_v2[valid_centroids]
+
+        # Re-normalize the centroids
+        centroids_v1 = cls_norm * F.normalize(centroids_v1, dim=-1)
+        centroids_v2 = cls_norm * F.normalize(centroids_v2, dim=-1)
+        return centroids_v1, centroids_v2
+
+    def compute_teacher_centroids(self, teacher_last_tokens, teacher_qkv_tokens, crop_pos):
+        # Compute the average norm of the centroids
+        cls_norm = teacher_last_tokens[:, 0, :].norm(dim=-1).mean()
+
+        # Obtain the joint representation of the teacher tokens
+        teacher_qkv_tokens = rearrange(teacher_qkv_tokens, '(m b) n d -> m b n d', m=2)
+        teacher_last_tokens = rearrange(teacher_last_tokens[:, 1:], '(m b) n d -> m b n d', m=2)
+        teacher_last_tokens = repeat(teacher_last_tokens, 'm b n d -> m (b h) n d', h=self.n_heads)
+
+        # Normalize the tokens
+        teacher_qkv_tokens = F.normalize(teacher_qkv_tokens, dim=-1)
+        teacher_cls_tokens, teacher_qkv_tokens = teacher_qkv_tokens[:, :,  0], teacher_qkv_tokens[:, :, 1:]
+
+        # Compute the random distribution
+        r = self.compute_r_marginals(teacher_qkv_tokens, teacher_cls_tokens, uniform_marginals=self.uniform_marginals)
+        p = F.softmax(r / self.marginals_temp_r, dim=1)
+        teacher_qkv_tokens = rearrange(teacher_qkv_tokens, 'm b n d -> b (m n) d', m=2)
+        b, n, _ = teacher_qkv_tokens.shape
+
+        # Get the indices as one-hot
+        indices = p.multinomial(num_samples=self.n_tokens, replacement=False)
+        indices = rearrange(indices, 'b k -> (b k)')
+        indices = torch.eye(n).to(teacher_qkv_tokens.device)[indices].to(teacher_qkv_tokens.device)
+        indices = rearrange(indices, '(b k) n -> b k n', b=b)
+
+        # --------------------------------------------------------------------------------
+        # Compute the initial marginals
+        n_regions = self.n_tokens
+        tokens_marginals, centroids_marginals = self.compute_c_marginals(
+            r, indices, uniform_marginals=self.uniform_marginals, temp_r=self.marginals_temp_r,
+            temp_c=self.marginals_temp_c
+        )
+
+        ############################################## POS ENC 1 START #####################################################
+        # Patchify positional encodings
+        positions = rearrange(torch.stack(crop_pos[:2]), 'm b d (r i) (c j) -> m b d (r c) (i j)', i=self.patch_size,
+                              j=self.patch_size).mean(dim=-1)
+        positions = rearrange(positions, "m b d n -> b (m n) d")
+
+        # Compute the query positions using the same sampling indices
+        positions = repeat(positions, 'b n d -> (b h) n d', h=self.n_heads)
+        centroids_positions = torch.einsum('b n d, b k n -> b k d', positions, indices)
+
+        # Compute the distance matrix
+        distances_p = torch.sqrt(torch.sum((centroids_positions[:, None, :, :] - positions[:, :, None, :]) ** 2, dim=-1))
+        distances_p /= distances_p.amax(dim=(-1, -2))[:, None, None]
+        distance_normalized_p = distances_p
+
+        # Set the initial centroids
+        centroids = torch.einsum('b n d, b k n -> b k d', teacher_qkv_tokens, indices)
+
+        # Iterate until the number of regions is 2
+        costs, assignments_full, indices_full = [], [], []
+        while (n_regions >= 2):
+            centroids = F.normalize(centroids, dim=-1)
+            assignments = torch.einsum('b n d, b k d -> b n k', teacher_qkv_tokens, centroids)
+            b, n, k = assignments.shape
+
+            # Get the cost
+            M = - assignments + self.pos_alpha * distance_normalized_p
+            M = (M - M.min()) / (M.max() - M.min())
+
+            # Compute the transportation plan and the distance
+            assignments, transportation_cost = self.sinkhorn(
+                M=M,
+                r=tokens_marginals,
+                c=centroids_marginals,
+            )
+
+            # Compute the current clustering cost
+            cost = transportation_cost
+
+            # Store the assignments normalized column-wise and view-wise
+            costs.append(cost)
+            assignments_ = rearrange(assignments, 'b (m n) k -> m b n k', m=2)
+            assignment_v1, assignment_v2 = assignments_.unbind()
+            assignment_v1 = assignment_v1 / assignment_v1.sum(dim=-2, keepdim=True)
+            assignment_v2 = assignment_v2 / assignment_v2.sum(dim=-2, keepdim=True)
+            assignments_ = torch.cat([assignment_v1, assignment_v2], dim=1)
+            assignments_full.append(assignments_)
+            indices_full.append(indices)
+
+            if n_regions == 2:
+                break
+
+            # Update the centroids
+            normalized_assignments = assignments / assignments.sum(dim=1, keepdim=True)
+            centroids = torch.einsum('b n d, b n k -> b k d', teacher_qkv_tokens, normalized_assignments)
+
+            # Find the centroids to merge
+            centroids_similarity = torch.einsum('b i d, b j d -> b i j', centroids, centroids)
+            centroids_similarity -= 2 * torch.eye(n_regions).to(centroids_similarity.device)
+            centroids_similarity = rearrange(centroids_similarity, 'b i j -> b (i j)')
+            merge_index = torch.argmax(centroids_similarity, dim=-1)
+            i = torch.div(merge_index, n_regions, rounding_mode='floor')
+            j = merge_index % n_regions
+
+            # Find the representative for the new centroid
+            b_indices = torch.arange(0, b).to(i.device)
+            b_k_indices_i = tuple(torch.stack([b_indices, i]).tolist())
+            b_k_indices_j = tuple(torch.stack([b_indices, j]).tolist())
+            new_indices = (indices[b_k_indices_i] + indices[b_k_indices_j])[:, None, :]
+
+            # Compute the new indices
+            kept_indices = repeat(torch.arange(0, k), 'k -> b k', b=b).to(i.device)
+            i_repeat = repeat(i, 'b -> b k', k=k).to(i.device)
+            j_repeat = repeat(j, 'b -> b k', k=k).to(i.device)
+            kept_indices = torch.logical_and(kept_indices != i_repeat, kept_indices != j_repeat)
+            indices = rearrange(indices[kept_indices], '(b k) n -> b k n', b=b)
+            indices = torch.cat([indices, new_indices], dim=1)
+
+            # Merge the assignments
+            assignments = rearrange(assignments, 'b n k -> b k n')
+            new_assignments = (assignments[b_k_indices_i] + assignments[b_k_indices_j])[:, None, :]
+            kept_assignments = rearrange(assignments[kept_indices], '(b k) n -> b k n', b=b)
+            assignments = torch.cat([kept_assignments, new_assignments], dim=1)
+            assignments = rearrange(assignments, 'b k n -> b n k')
+
+            # Update the centroids
+            normalized_assignments = assignments / assignments.sum(dim=1, keepdim=True)
+            centroids = torch.einsum('b n d, b n k -> b k d', teacher_qkv_tokens, normalized_assignments)
+
+            # Update the positions distance cost
+            centroids_positions = torch.einsum('b n d, b n k -> b k d', positions, normalized_assignments)
+
+            # Compute the distance matrix
+            distances_p = torch.sqrt(
+                torch.sum((centroids_positions[:, None, :, :] - positions[:, :, None, :]) ** 2, dim=-1))
+            distances_p /= distances_p.amax(dim=(-1, -2))[:, None, None]
+            distance_normalized_p = distances_p
+
+            # Update the number of regions
+            n_regions -= 1
+
+            # Compute the new marginals
+            centroids_marginals = torch.einsum('b n, b n k -> b k', tokens_marginals.squeeze(),
+                                               normalized_assignments).unsqueeze(1)
+            centroids_marginals /= centroids_marginals.sum(dim=-1, keepdim=True)
+
+        # Stack the costs
+        costs = torch.stack(costs, dim=-1)
+
+        # Retrieve the best assignments
+        stop_index = - (self.n_centroids_max - 1)
+        costs = costs[:, stop_index:]
+        optimal_ks = costs.argmin(dim=-1)
+        optimal_ks = optimal_ks + (self.n_tokens - self.n_centroids_max)
+
+        assignments = [assignments_full[j][i].transpose(0, 1) for i, j in enumerate(optimal_ks.tolist())]
+        assignments = pad_sequence(assignments, batch_first=True).transpose(1, 2)
+
+        # ============================ Split the cluster view-wise ===========================================
+        # Each token belongs to a single cluster
+        hard_assignments = torch.max(assignments, dim=-1, keepdim=True).values
+        hard_assignments = repeat(hard_assignments, 'b n 1 -> b n k', k=assignments.shape[-1])
+        hard_assignments = (assignments == hard_assignments).float()
+        masked_assignments = assignments * hard_assignments
+
+        # Split the assignments view-wise
+        masked_assignments = rearrange(masked_assignments, 'b (m n) k -> m b n k', m=2)
+        assignments = masked_assignments
+
+        # Compute the centroids of each view and normalize the assignments
+        centroids = torch.einsum('m b n d, m b n k -> m b k d', teacher_last_tokens, assignments)
+        centroids = rearrange(centroids, 'm b k d -> m (b k) d')
+        centroids_v1, centroids_v2 = centroids.unbind()
+
+        # Discard a cluster if it's empty in either view
+        masked_assignments_v1, masked_assignments_v2 = rearrange(masked_assignments, 'm b n k -> m (b k) n').unbind()
+        valid_centroids_v1 = set(masked_assignments_v1.sum(dim=-1).nonzero().squeeze().tolist())
+        valid_centroids_v2 = set(masked_assignments_v2.sum(dim=-1).nonzero().squeeze().tolist())
+        valid_centroids = list(valid_centroids_v1.intersection(valid_centroids_v2))
+        centroids_v1, centroids_v2 = centroids_v1[valid_centroids], centroids_v2[valid_centroids]
+
+        # # The centroids must have approximately the same norm as the [CLS] tokens
+        centroids_v1 = cls_norm * F.normalize(centroids_v1, dim=-1)
+        centroids_v2 = cls_norm * F.normalize(centroids_v2, dim=-1)
+
+        # Count the average number of regions
+        region_count = self.n_tokens - optimal_ks.float().mean().item()
+        return (centroids_v1, centroids_v2), valid_centroids, assignments, region_count
 
 
 if __name__ == '__main__':
