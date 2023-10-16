@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.distributions.constraints import simplex
 
-from llp_vat.lib.networks import GaussianNoise
+# from llp_vat.lib.networks import GaussianNoise
 
 
 def compute_soft_kl(inputs, targets):
