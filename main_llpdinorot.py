@@ -228,6 +228,10 @@ def train_dino(args):
         DINOHead(embed_dim, args.out_dim, args.use_bn_in_head),
     )
 
+        CrOCHead(embed_dim, args.out_dim, args.out_dim_c, args.use_bn_in_head),
+        args.which_features,
+    )
+
     clustering = Clustering(
         args,
         n_tokens=args.n_tokens,
