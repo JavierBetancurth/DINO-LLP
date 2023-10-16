@@ -147,6 +147,12 @@ def get_args_parser():
     parser.add_argument("--local_rank", default=0, type=int, help="Please ignore and do not set this argument.")
     return parser
 
+def train_valid_split(dataset, valid_ratio, seed):
+    torch.manual_seed(seed)
+    valid_size = int(valid_ratio * len(dataset))
+    train_size = len(dataset) - valid_size
+    train, valid = random_split(dataset, [train_size, valid_size])
+    return train, valid
 
 def train_dino(args):
     utils.init_distributed_mode(args)
@@ -161,25 +167,48 @@ def train_dino(args):
         args.local_crops_scale,
         args.local_crops_number,
     )
-    
-    # dataset = datasets.ImageFolder(args.data_path, transform=transform)
 
+    # load LLP dataset
+    if args.alg == "uniform":
+        dataset, bags = load_llp_dataset(args.dataset_dir,
+                                         args.obj_dir,
+                                         args.dataset_name,
+                                         args.alg,
+                                         replacement=args.replacement,
+                                         bag_size=args.bag_size)
+    elif args.alg == "kmeans":
+        dataset, bags = load_llp_dataset(args.dataset_dir,
+                                         args.obj_dir,
+                                         args.dataset_name,
+                                         args.alg,
+                                         n_clusters=args.n_clusters,
+                                         reduction=args.reduction)
+    else:
+        raise NameError("The bag creation algorithm is unknown")
+
+    # consturct data loader
+    train_bags, valid_bags = train_valid_split(bags, args.valid, args.seed)
+    train_bag_sampler = BagSampler(train_bags, args.num_bags)
+    train_loader = DataLoader(dataset["train"],
+                              batch_sampler=train_bag_sampler,
+                              pin_memory=True,
+                              num_workers=2)
+    valid_loader = None
+    if args.valid > 0:
+        valid_bag_sampler = BagSampler(valid_bags, num_bags=-1)
+        valid_loader = DataLoader(dataset["train"],
+                                  batch_sampler=valid_bag_sampler,
+                                  pin_memory=True,
+                                  num_workers=2)
+    test_loader = DataLoader(dataset["test"],
+                             batch_size=256,
+                             pin_memory=True,
+                             num_workers=2)
 
     # prueba datasets
     dataset = torchvision.datasets.CIFAR10(root=".", train=True,  transform=transform, download=True)
     labels = dataset.targets
 
-
-    
-    sampler = torch.utils.data.DistributedSampler(dataset, shuffle=True)
-    data_loader = torch.utils.data.DataLoader(
-        dataset,
-        sampler=sampler,
-        batch_size=args.batch_size_per_gpu,
-        num_workers=args.num_workers,
-        pin_memory=True,
-        drop_last=True,
-    )
     print(f"Data loaded: there are {len(dataset)} images.")
 
     # ============ building student and teacher networks ... ============
