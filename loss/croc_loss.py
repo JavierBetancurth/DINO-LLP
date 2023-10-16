@@ -1,3 +1,26 @@
+# Copyright (c) Facebook, Inc. and its affiliates.
+# 
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+# 
+#     http://www.apache.org/licenses/LICENSE-2.0
+# 
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+import torch
+import torch.nn as nn
+import torch.distributed as dist
+import torch.nn.functional as F
+import numpy as np
+
+import utils
+from torchvision import datasets, transforms
+
+# From Cross-View Online Clustering for Dense Visual Representation Learning
 class CrOCLoss(nn.Module):
     def __init__(self, out_dim, out_dim_c, ncrops, warmup_teacher_temp, warmup_teacher_temp_c, teacher_temp, teacher_temp_c,
                  warmup_teacher_temp_epochs, nepochs, student_temp=0.1, student_temp_c=0.1, center_momentum=0.9, center_momentum_c=0.9):
