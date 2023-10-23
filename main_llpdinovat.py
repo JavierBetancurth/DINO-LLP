@@ -135,11 +135,21 @@ def get_args_parser():
 
 
     
-    # basic arguments
+     # basic arguments
     parser.add_argument("--obj_dir", default="./obj")
     parser.add_argument("--dataset_dir", default="./obj/dataset")
     parser.add_argument("--result_dir", default="./results")
     parser.add_argument("-d", "--dataset_name", type=str)
+    parser.add_argument("-m", "--model_name", type=str, default="wrn28-2")
+    parser.add_argument("-e", "--num_epochs", type=int, default=400)
+    parser.add_argument("--lr", type=float, default=3e-4)
+    parser.add_argument("--optimizer", type=str, default="adam")
+    parser.add_argument("--weight_decay", type=float, default=0.)
+    parser.add_argument("--metric", type=str, default="ce")
+    parser.add_argument("--valid", type=float, default=0.1)
+    parser.add_argument("--seed", default=0, type=int)
+    parser.add_argument("--n_samples", default=0, type=int)
+    parser.add_argument("--disable", action="store_true", help="disable the progress bar")
     
     # bag creation algorithms
     parser.add_argument("--alg", choices=["uniform", "kmeans"], default="uniform")
