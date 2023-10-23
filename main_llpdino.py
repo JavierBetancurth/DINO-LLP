@@ -96,7 +96,7 @@ def get_args_parser():
         help optimization for larger ViT architectures. 0 for disabling.""")
     parser.add_argument('--batch_size_per_gpu', default=64, type=int,
         help='Per-GPU batch-size : number of distinct images loaded on one GPU.')
-    parser.add_argument('--epochs', default=10, type=int, help='Number of epochs of training.')
+    parser.add_argument('--epochs', default=100, type=int, help='Number of epochs of training.')
     parser.add_argument('--freeze_last_layer', default=1, type=int, help="""Number of epochs
         during which we keep the output layer fixed. Typically doing so during
         the first epoch helps training. Try increasing this value if the loss does not decrease.""")
@@ -168,7 +168,6 @@ def train_dino(args):
     # prueba datasets
     dataset = torchvision.datasets.CIFAR10(root=".", train=True,  transform=transform, download=True)
     labels = dataset.targets
-
 
     
     sampler = torch.utils.data.DistributedSampler(dataset, shuffle=True)
