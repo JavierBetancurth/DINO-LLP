@@ -133,6 +133,23 @@ def get_args_parser():
     parser.add_argument("--nmb_prototypes", default=10, type=int,
        help="number of prototypes")
 
+
+    
+    # basic arguments
+    parser.add_argument("--obj_dir", default="./obj")
+    parser.add_argument("--dataset_dir", default="./obj/dataset")
+    parser.add_argument("--result_dir", default="./results")
+    parser.add_argument("-d", "--dataset_name", type=str)
+    
+    # bag creation algorithms
+    parser.add_argument("--alg", choices=["uniform", "kmeans"])
+    parser.add_argument("-b", "--bag_size", type=int)
+    parser.add_argument("--replacement", action="store_true")
+    parser.add_argument("-k", "--n_clusters", type=int)
+    parser.add_argument("--reduction", type=int, default=600)
+
+    
+
     # losses parameters
     parser.add_argument('--alpha', type=float, default=0.8, help="""alpha parameter defined to 
         weight between dino and kl losses.""")    
