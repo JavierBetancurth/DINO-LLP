@@ -217,7 +217,7 @@ def train_dino(args):
     # consturct data loader
     train_bags, valid_bags = train_valid_split(bags, args.valid, args.seed)
     train_bag_sampler = BagSampler(train_bags, args.num_bags)
-    train_loader = DataLoader(dataset["train"],
+    data_loader = DataLoader(dataset["train"],
                               batch_sampler=train_bag_sampler,
                               pin_memory=True,
                               num_workers=2)
