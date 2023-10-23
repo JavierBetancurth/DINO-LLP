@@ -168,12 +168,6 @@ def get_args_parser():
     parser.add_argument("--local_rank", default=0, type=int, help="Please ignore and do not set this argument.")
     return parser
 
-def train_valid_split(dataset, valid_ratio, seed):
-    torch.manual_seed(seed)
-    valid_size = int(valid_ratio * len(dataset))
-    train_size = len(dataset) - valid_size
-    train, valid = random_split(dataset, [train_size, valid_size])
-    return train, valid
 
 def train_dino(args):
     utils.init_distributed_mode(args)
