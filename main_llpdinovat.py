@@ -40,6 +40,8 @@ from vision_transformer import DINOHead
 from loss.kl_loss import compute_kl_loss_on_bagbatch
 from proportions_assignments.prototypes_layer import Prototypes
 
+from data.preprocessing import BagMiniBatch, load_llp_dataset, BagSampler, Iteration
+
 
 torchvision_archs = sorted(name for name in torchvision_models.__dict__
     if name.islower() and not name.startswith("__")
@@ -204,10 +206,6 @@ def train_dino(args):
                              batch_size=256,
                              pin_memory=True,
                              num_workers=2)
-
-    # prueba datasets
-    dataset = torchvision.datasets.CIFAR10(root=".", train=True,  transform=transform, download=True)
-    labels = dataset.targets
 
     print(f"Data loaded: there are {len(dataset)} images.")
 
