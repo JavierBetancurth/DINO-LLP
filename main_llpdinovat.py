@@ -31,6 +31,7 @@ import torch.nn.functional as F
 from torchvision import datasets, transforms
 from torchvision import models as torchvision_models
 
+from torch.utils.data import DataLoader
 from torch.utils.data.dataset import random_split
 
 import utils
