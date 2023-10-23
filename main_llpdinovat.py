@@ -144,13 +144,17 @@ def get_args_parser():
     parser.add_argument("-d", "--dataset_name", type=str)
     parser.add_argument("--valid", type=float, default=0.1)
     
-    
     # bag creation algorithms
     parser.add_argument("--alg", choices=["uniform", "kmeans"], default="uniform")
     parser.add_argument("-b", "--bag_size", type=int, default=64)
     parser.add_argument("--replacement", action="store_true")
     parser.add_argument("-k", "--n_clusters", type=int)
     parser.add_argument("--reduction", type=int, default=600)
+
+    # coefficient for proportion loss
+    parser.add_argument("--num_bags", default=-1, type=int)
+    parser.add_argument("--mini_batch_size", type=int, default=2)
+    
 
     
 
