@@ -133,19 +133,7 @@ def get_args_parser():
 
     # losses parameters
     parser.add_argument('--alpha', type=float, default=0.8, help="""alpha parameter defined to 
-        weight between dino and kl losses.""")
-
-
-    parser.add_argument("--obj_dir", default="./obj")
-    parser.add_argument("--dataset_dir", default="./obj/dataset")
-    parser.add_argument("-d", "--dataset_name", choices=["svhn", "cifar10", "cifar100"], required=True)
-    parser.add_argument("--alg", choices=["uniform", "kmeans"], required=True)
-    parser.add_argument("-b", "--bag_size", type=int)
-    parser.add_argument("--replacement", action="store_true")
-    parser.add_argument("-k", "--n_clusters", type=int)
-    parser.add_argument("--reduction", type=int, default=600)
-    parser.add_argument("--seed", default=0, type=int)
-    
+        weight between dino and kl losses.""")    
 
     # Misc
     parser.add_argument('--data_path', default='/path/to/imagenet/train/', type=str,
