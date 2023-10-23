@@ -40,7 +40,7 @@ from vision_transformer import DINOHead
 from loss.kl_loss import compute_kl_loss_on_bagbatch
 from proportions_assignments.prototypes_layer import Prototypes
 
-from data.preprocessing import BagMiniBatch, load_llp_dataset, BagSampler, Iteration
+from data.bags import BagMiniBatch, load_llp_dataset, BagSampler, Iteration
 
 
 torchvision_archs = sorted(name for name in torchvision_models.__dict__
