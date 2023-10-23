@@ -1,6 +1,6 @@
 import argparse
 
-from llp_vat.lib.llp import create_llp_dataset
+from data.bags import create_llp_dataset
 
 
 def main(args):
