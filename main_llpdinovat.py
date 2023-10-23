@@ -141,9 +141,7 @@ def get_args_parser():
     parser.add_argument("--result_dir", default="./results")
     parser.add_argument("-d", "--dataset_name", type=str)
     parser.add_argument("--valid", type=float, default=0.1)
-    parser.add_argument("--seed", default=0, type=int)
-    parser.add_argument("--n_samples", default=0, type=int)
-    parser.add_argument("--disable", action="store_true", help="disable the progress bar")
+    
     
     # bag creation algorithms
     parser.add_argument("--alg", choices=["uniform", "kmeans"], default="uniform")
