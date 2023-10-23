@@ -75,37 +75,6 @@ def cifar100(root):
     return {'train': train, 'test': test, 'num_classes': num_classes}
 
 
-def svhn(root):
-    channel_stats = dict(mean=[0.4377, 0.4438, 0.4728],
-                         std=[0.1980, 0.2010, 0.1970])
-    num_classes = 10
-
-    transform = {
-        "train":
-        transforms.Compose([
-            transforms.RandomCrop(32, padding=4),
-            transforms.RandomHorizontalFlip(),
-            transforms.ToTensor(),
-            transforms.Normalize(**channel_stats)
-        ]),
-        "test":
-        transforms.Compose(
-            [transforms.ToTensor(),
-             transforms.Normalize(**channel_stats)])
-    }
-    train = SVHN(root,
-                 split='train',
-                 transform=transform["train"],
-                 target_transform=ToOneHot(num_classes),
-                 download=True)
-    test = SVHN(root,
-                split='test',
-                transform=transform["test"],
-                target_transform=ToOneHot(num_classes),
-                download=True)
-    return {'train': train, 'test': test, 'num_classes': num_classes}
-
-
 def load_dataset(root, dataset_name):
     dataset_name = dataset_name.lower()
 
