@@ -40,6 +40,8 @@ from vision_transformer import DINOHead
 from loss.kl_loss import compute_kl_loss_on_bagbatch
 from proportions_assignments.prototypes_layer import Prototypes
 
+from torch.utils.data import BatchSampler, RandomSampler
+
 
 torchvision_archs = sorted(name for name in torchvision_models.__dict__
     if name.islower() and not name.startswith("__")
@@ -148,6 +150,30 @@ def get_args_parser():
     return parser
 
 
+def uniform_creation(dataset, bag_size, replacement, seed, drop_last=True):
+    """
+    return:
+        bags: a nested list containing instance indices, shape (n_bags, *)
+    """
+    torch.manual_seed(seed)
+
+    start = time.time()
+    indices = RandomSampler(range(len(dataset)), replacement=replacement)
+    bags = list(BatchSampler(indices, batch_size=bag_size, drop_last=drop_last))
+    print("Create uniform bags in {:.2f} seconds".format(time.time() - start))
+
+    # Calculate label proportions
+    label_counts = torch.zeros(len(dataset.classes))
+    for bag in bags:
+        for idx in bag:
+            label = dataset[idx][1]
+            label_counts[label] += 1
+
+    label_proportions = label_counts / label_counts.sum()
+
+    return bags, label_proportions
+
+
 def train_dino(args):
     utils.init_distributed_mode(args)
     utils.fix_random_seeds(args.seed)
@@ -169,18 +195,25 @@ def train_dino(args):
     dataset = torchvision.datasets.CIFAR10(root=".", train=True,  transform=transform, download=True)
     labels = dataset.targets
 
-
+    # Parámetros para uniform_creation y DataLoader
+    bag_size = args.batch_size_per_gpu
+    replacement = True  # Con reemplazo
+    seed = 123  # Semilla aleatoria
+    drop_last = True
     
-    sampler = torch.utils.data.DistributedSampler(dataset, shuffle=True)
+    # Llamada a uniform_creation y DataLoader
+    bags, label_proportions = uniform_creation(dataset, bag_size, replacement, seed, drop_last)
+    sampler = torch.utils.data.SequentialSampler(bags)
     data_loader = torch.utils.data.DataLoader(
         dataset,
         sampler=sampler,
-        batch_size=args.batch_size_per_gpu,
+        batch_size=bag_size,
         num_workers=args.num_workers,
         pin_memory=True,
-        drop_last=True,
+        drop_last=drop_last,
     )
     print(f"Data loaded: there are {len(dataset)} images.")
+    print("Label proportions in the batch:", label_proportions)
 
     # ============ building student and teacher networks ... ============
     # we changed the name DeiT-S for ViT-S to avoid confusions
@@ -385,7 +418,7 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
             
             # print(prototypes_output)
             # Calcular la pérdida KL entre las salidas de Prototipos y las proporciones reales del lote
-            loss2 = compute_kl_loss_on_bagbatch(prototypes_output, class_proportions_list, epsilon=1e-8)
+            loss2 = compute_kl_loss_on_bagbatch(prototypes_output, label_proportions, epsilon=1e-8)
             
             # print(loss1, loss2)
             # loss = loss1 + loss2
