@@ -161,15 +161,8 @@ def train_dino(args):
         args.local_crops_scale,
         args.local_crops_number,
     )
-    
-    # dataset = datasets.ImageFolder(args.data_path, transform=transform)
 
-
-    # prueba datasets
-    dataset = torchvision.datasets.CIFAR10(root=".", train=True,  transform=transform, download=True)
-    labels = dataset.targets
-
-    
+    dataset = datasets.ImageFolder(args.data_path, transform=transform)
     sampler = torch.utils.data.DistributedSampler(dataset, shuffle=True)
     data_loader = torch.utils.data.DataLoader(
         dataset,
@@ -179,6 +172,12 @@ def train_dino(args):
         pin_memory=True,
         drop_last=True,
     )
+    
+    # dataset = datasets.ImageFolder(args.data_path, transform=transform)
+    # prueba datasets
+    #dataset = torchvision.datasets.CIFAR10(root=".", train=True,  transform=transform, download=True)
+    #labels = dataset.targets
+
     print(f"Data loaded: there are {len(dataset)} images.")
 
     # ============ building student and teacher networks ... ============
