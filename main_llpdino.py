@@ -176,7 +176,8 @@ def train_dino(args):
     # dataset = datasets.ImageFolder(args.data_path, transform=transform)
     # prueba datasets
     #dataset = torchvision.datasets.CIFAR10(root=".", train=True,  transform=transform, download=True)
-    #labels = dataset.targets
+    
+    labels = dataset.targets
 
     print(f"Data loaded: there are {len(dataset)} images.")
 
