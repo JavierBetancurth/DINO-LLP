@@ -437,10 +437,12 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
     # gather the stats from all processes
     metric_logger.synchronize_between_processes()
     print("Averaged stats:", metric_logger)
-    return {k: meter.global_avg for k, meter in metric_logger.meters.items()}
-    
+
+    # Print class proportions
     for i, proportions in enumerate(class_proportions_list):
-        print(f"Proporciones de clase en lote {i + 1}: {proportions}")
+        print(f"Proporciones de clase en lote {i}: {proportions}")
+                   
+    return {k: meter.global_avg for k, meter in metric_logger.meters.items()}
 
 
 class DINOLoss(nn.Module):
