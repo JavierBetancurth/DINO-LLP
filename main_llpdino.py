@@ -75,7 +75,7 @@ def get_args_parser():
     parser.add_argument('--warmup_teacher_temp', default=0.04, type=float,
         help="""Initial value for the teacher temperature: 0.04 works well in most cases.
         Try decreasing it if the training loss does not decrease.""")
-    parser.add_argument('--teacher_temp', default=0.07, type=float, help="""Final value (after linear warmup) # 0.04
+    parser.add_argument('--teacher_temp', default=0.04, type=float, help="""Final value (after linear warmup) 
         of the teacher temperature. For most experiments, anything above 0.07 is unstable. We recommend
         starting with the default value of 0.04 and increase this slightly if needed.""")
     parser.add_argument('--warmup_teacher_temp_epochs', default=30, type=int,
@@ -439,8 +439,8 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
     print("Averaged stats:", metric_logger)
 
     # Print class proportions
-    for i, proportions in enumerate(class_proportions_list):
-        print(f"Proporciones de clase en lote {i}: {proportions}")
+    #for i, proportions in enumerate(class_proportions_list):
+        #print(f"Proporciones de clase en lote {i}: {proportions}")
                    
     return {k: meter.global_avg for k, meter in metric_logger.meters.items()}
 
