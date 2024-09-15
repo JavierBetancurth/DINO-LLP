@@ -337,9 +337,12 @@ def compute_kl_loss_on_bagbatch(estimated_proportions, class_proportions, epsilo
     probabilities = F.softmax(estimated_proportions, dim=-1)
     avg_prob = torch.mean(probabilities, dim=0)
     avg_prob = torch.clamp(avg_prob, epsilon, 1 - epsilon)
-        
+
+    # Ignorar las clases con proporciones reales de cero
+    mask = real_proportions > 0
+    
     # Calcular la pérdida KL utilizando las proporciones del lote
-    loss = torch.sum(-real_proportions * torch.log(avg_prob), dim=-1).mean()
+    loss = torch.sum(-real_proportions[mask] * torch.log(avg_prob[mask]), dim=-1).mean()
     
     return loss
 
