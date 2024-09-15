@@ -339,12 +339,18 @@ def compute_kl_loss_on_bagbatch(estimated_proportions, class_proportions, epsilo
     avg_prob = torch.clamp(avg_prob, epsilon, 1 - epsilon)
 
     # Ignorar las clases con proporciones reales de cero
-    mask = real_proportions > 0
+    # mask = real_proportions > 0 ---[mask]
     
     # Calcular la pérdida KL utilizando las proporciones del lote
-    loss = torch.sum(-real_proportions[mask] * torch.log(avg_prob[mask]), dim=-1).mean()
+    loss = torch.sum(-real_proportions * torch.log(avg_prob), dim=-1).mean()
     
     return loss
+
+def calculate_accuracy(predictions, labels):
+    _, preds = torch.max(predictions, 1)
+    correct = torch.sum(preds == labels)
+    accuracy = correct.float() / labels.size(0)
+    return accuracy.item()
 
 def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loader,
                     optimizer, lr_schedule, wd_schedule, momentum_schedule,epoch,
@@ -359,6 +365,7 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
     # class_proportions_list = []  # lista para almacenar las proporciones de clase por lote
                         
     for it, (images, labels) in enumerate(metric_logger.log_every(data_loader, 10, header)):
+        
         # Calcular las proporciones de clase en el lote actual
         class_proportions = calculate_class_proportions_in_batch(labels, dataset)
         
@@ -389,6 +396,12 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
             
             # Combinar las pérdidas usando el parámetro alpha
             loss = args.alpha * loss1 + (1 - args.alpha) * loss2
+        
+        # Cálculo de la precisión de clasificación
+        accuracy = calculate_accuracy(student_output, labels)
+        
+        # Registro de la precisión junto con las pérdidas y otras métricas
+        # metric_logger.update(accuracy=accuracy)
 
         if not math.isfinite(loss.item()):
             print("Loss is {}, stopping training".format(loss.item()), force=True)
@@ -434,7 +447,8 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
         metric_logger.update(loss_kl=loss2.item())
         metric_logger.update(lr=optimizer.param_groups[0]["lr"])
         metric_logger.update(wd=optimizer.param_groups[0]["weight_decay"])
-        # metric_logger.update(alpha=current_alpha)
+        metric_logger.update(alpha=alpha)
+        metric_logger.update(accuracy=accuracy)
     # gather the stats from all processes
     metric_logger.synchronize_between_processes()
     print("Averaged stats:", metric_logger)
@@ -525,8 +539,10 @@ class DataAugmentationDINO(object):
         ])
         normalize = transforms.Compose([
             transforms.ToTensor(),
-            transforms.Normalize((0.5005, 0.5253, 0.4883), (0.2136, 0.2126, 0.2668)),
+            transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2470, 0.2435, 0.2616)),
         ]) # Normalize((0.4914, 0.4822, 0.4465), (0.2470, 0.2435, 0.2616)) 
+
+        # Normalize((0.5005, 0.5253, 0.4883), (0.2136, 0.2126, 0.2668)) 
 
         # first global crop
         self.global_transfo1 = transforms.Compose([
