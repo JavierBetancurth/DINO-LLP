@@ -346,12 +346,6 @@ def compute_kl_loss_on_bagbatch(estimated_proportions, class_proportions, epsilo
     
     return loss
 
-def calculate_accuracy(predictions, labels):
-    _, preds = torch.max(predictions, 1)
-    correct = torch.sum(preds == labels)
-    accuracy = correct.float() / labels.size(0)
-    return accuracy.item()
-
 def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loader,
                     optimizer, lr_schedule, wd_schedule, momentum_schedule,epoch,
                     fp16_scaler, dataset, args):  # se agrega la variable dataset
