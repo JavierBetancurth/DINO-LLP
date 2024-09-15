@@ -37,7 +37,7 @@ from vision_transformer import DINOHead
 
 
 # proportions
-from loss.kl_loss import compute_kl_loss_on_bagbatch
+# from loss.kl_loss import compute_kl_loss_on_bagbatch
 from proportions_assignments.prototypes_layer import Prototypes
 
 
@@ -146,7 +146,6 @@ def get_args_parser():
         distributed training; see https://pytorch.org/docs/stable/distributed.html""")
     parser.add_argument("--local_rank", default=0, type=int, help="Please ignore and do not set this argument.")
     return parser
-
 
 def train_dino(args):
     utils.init_distributed_mode(args)
@@ -331,6 +330,18 @@ def calculate_class_proportions_in_batch(labels, dataset):
     class_proportions = class_counts / len(labels)
     return class_proportions
 
+def compute_kl_loss_on_bagbatch(estimated_proportions, class_proportions, epsilon=1e-8):
+    real_proportions = torch.tensor(class_proportions, dtype=torch.float32).cuda()
+    
+    # Calcular las probabilidades y la pérdida KL
+    probabilities = F.softmax(estimated_proportions, dim=-1)
+    avg_prob = torch.mean(probabilities, dim=0)
+    avg_prob = torch.clamp(avg_prob, epsilon, 1 - epsilon)
+        
+    # Calcular la pérdida KL utilizando las proporciones del lote
+    loss = torch.sum(-real_proportions * torch.log(avg_prob), dim=-1).mean()
+    
+    return loss
 
 def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loader,
                     optimizer, lr_schedule, wd_schedule, momentum_schedule,epoch,
@@ -416,8 +427,11 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
         # logging
         torch.cuda.synchronize()
         metric_logger.update(loss=loss.item())
+        metric_logger.update(loss_dino=loss1.item())
+        metric_logger.update(loss_kl=loss2.item())
         metric_logger.update(lr=optimizer.param_groups[0]["lr"])
         metric_logger.update(wd=optimizer.param_groups[0]["weight_decay"])
+        metric_logger.update(alpha=current_alpha)
     # gather the stats from all processes
     metric_logger.synchronize_between_processes()
     print("Averaged stats:", metric_logger)
@@ -427,19 +441,6 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
         # print(f"Proporciones de clase en lote {i}: {proportions}")
                    
     return {k: meter.global_avg for k, meter in metric_logger.meters.items()}
-
-def compute_kl_loss_on_bagbatch(estimated_proportions, class_proportions, epsilon=1e-8):
-    real_proportions = torch.tensor(class_proportions, dtype=torch.float32).cuda()
-    
-    # Calcular las probabilidades y la pérdida KL
-    probabilities = F.softmax(estimated_proportions, dim=-1)
-    avg_prob = torch.mean(probabilities, dim=0)
-    avg_prob = torch.clamp(avg_prob, epsilon, 1 - epsilon)
-        
-    # Calcular la pérdida KL utilizando las proporciones del lote
-    loss = torch.sum(-real_proportions * torch.log(avg_prob), dim=-1).mean()
-    
-    return loss
 
 class DINOLoss(nn.Module):
     def __init__(self, out_dim, ncrops, warmup_teacher_temp, teacher_temp,
