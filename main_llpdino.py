@@ -398,7 +398,7 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
             loss = args.alpha * loss1 + (1 - args.alpha) * loss2
         
         # Cálculo de la precisión de clasificación
-        accuracy = calculate_accuracy(student_output, labels)
+        # accuracy = calculate_accuracy(student_output, labels)
         
         # Registro de la precisión junto con las pérdidas y otras métricas
         # metric_logger.update(accuracy=accuracy)
@@ -448,7 +448,7 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
         metric_logger.update(lr=optimizer.param_groups[0]["lr"])
         metric_logger.update(wd=optimizer.param_groups[0]["weight_decay"])
         metric_logger.update(alpha=alpha)
-        metric_logger.update(accuracy=accuracy)
+        # metric_logger.update(accuracy=accuracy)
     # gather the stats from all processes
     metric_logger.synchronize_between_processes()
     print("Averaged stats:", metric_logger)
