@@ -334,20 +334,23 @@ def calculate_class_proportions_in_batch(labels, dataset):
 
 def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loader,
                     optimizer, lr_schedule, wd_schedule, momentum_schedule,epoch,
-                    fp16_scaler, dataset, args):    # se agrega la variable dataset
+                    fp16_scaler, dataset, args):  # se agrega la variable dataset
     metric_logger = utils.MetricLogger(delimiter="  ")
     header = 'Epoch: [{}/{}]'.format(epoch, args.epochs)
 
-
+    # Crear una instancia de Prototypes fuera del bucle
+    output_dim = args.out_dim
+    prototypes_layer = Prototypes(output_dim, args.nmb_prototypes).cuda()
                         
-    class_proportions_list = []  # lista para almacenar las proporciones de clase por lote
-    
+    # class_proportions_list = []  # lista para almacenar las proporciones de clase por lote
                         
     for it, (images, labels) in enumerate(metric_logger.log_every(data_loader, 10, header)):
-        
         # Calcular las proporciones de clase en el lote actual
         class_proportions = calculate_class_proportions_in_batch(labels, dataset)
-        class_proportions_list.append(class_proportions)
+        
+        # Calcular las proporciones de clase en el lote actual
+        # class_proportions = calculate_class_proportions_in_batch(labels, dataset)
+        # class_proportions_list.append(class_proportions)
         
         # update weight decay and learning rate according to their schedule
         it = len(data_loader) * epoch + it  # global training iteration
@@ -360,37 +363,18 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
         images = [im.cuda(non_blocking=True) for im in images]
         # teacher and student forward passes + compute dino loss
         with torch.cuda.amp.autocast(fp16_scaler is not None):
-            teacher_output = teacher(images[:2])  # only the 2 global views pass through the teacher
+            teacher_output = teacher(images[:2])
             student_output = student(images)
             loss1 = dino_loss(student_output, teacher_output, epoch)
             
             # Paso a través de la capa de Prototipos
-
-            output_dim = 65536
-
-            # Crear una instancia de Prototypes nmb_prototypes
-            # nmb_prototypes = 10  # O la cantidad deseada de clases
-            prototypes_layer = Prototypes(output_dim, args.nmb_prototypes)
-
-            # Mover la capa de Prototipos a la GPU si está disponible
-            prototypes_layer = prototypes_layer.cuda()
-
-            # Asegurarse de que student_output sea un tensor de PyTorch si no lo es
-            # student_output = torch.tensor(student_output, dtype=torch.float32)
-            student_output.clone().detach().requires_grad_(True)
-
-            # Paso a través de la capa de Prototipos
             prototypes_output = prototypes_layer(student_output)
             
-            # print(prototypes_output)
-            # Calcular la pérdida KL entre las salidas de Prototipos y las proporciones reales del lote
-            loss2 = compute_kl_loss_on_bagbatch(prototypes_output, class_proportions_list, epsilon=1e-8)
+            # Calcular la pérdida KL
+           loss2 = compute_kl_loss_on_bagbatch(prototypes_output, class_proportions, epsilon=1e-8)
             
-            # print(loss1, loss2)
-            # loss = loss1 + loss2
-            # Combine the losses using the alpha parameter
+            # Combinar las pérdidas usando el parámetro alpha
             loss = args.alpha * loss1 + (1 - args.alpha) * loss2
-
 
         if not math.isfinite(loss.item()):
             print("Loss is {}, stopping training".format(loss.item()), force=True)
@@ -439,11 +423,23 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
     print("Averaged stats:", metric_logger)
 
     # Print class proportions
-    #for i, proportions in enumerate(class_proportions_list):
-        #print(f"Proporciones de clase en lote {i}: {proportions}")
+    # for i, proportions in enumerate(class_proportions_list):
+        # print(f"Proporciones de clase en lote {i}: {proportions}")
                    
     return {k: meter.global_avg for k, meter in metric_logger.meters.items()}
 
+def compute_kl_loss_on_bagbatch(estimated_proportions, class_proportions, epsilon=1e-8):
+    real_proportions = torch.tensor(class_proportions, dtype=torch.float32).cuda()
+    
+    # Calcular las probabilidades y la pérdida KL
+    probabilities = F.softmax(estimated_proportions, dim=-1)
+    avg_prob = torch.mean(probabilities, dim=0)
+    avg_prob = torch.clamp(avg_prob, epsilon, 1 - epsilon)
+        
+    # Calcular la pérdida KL utilizando las proporciones del lote
+    loss = torch.sum(-real_proportions * torch.log(avg_prob), dim=-1).mean()
+    
+    return loss
 
 class DINOLoss(nn.Module):
     def __init__(self, out_dim, ncrops, warmup_teacher_temp, teacher_temp,
