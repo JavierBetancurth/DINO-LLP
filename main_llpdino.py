@@ -385,7 +385,7 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
             prototypes_output = prototypes_layer(student_output)
             
             # Calcular la pérdida KL
-           loss2 = compute_kl_loss_on_bagbatch(prototypes_output, class_proportions, epsilon=1e-8)
+            loss2 = compute_kl_loss_on_bagbatch(prototypes_output, class_proportions, epsilon=1e-8)
             
             # Combinar las pérdidas usando el parámetro alpha
             loss = args.alpha * loss1 + (1 - args.alpha) * loss2
