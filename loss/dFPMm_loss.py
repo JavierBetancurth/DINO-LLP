@@ -88,6 +88,8 @@ class DINOLossdFPMm(nn.Module):
         Q *= B  # the columns must sum to 1 so that Q is an assignment
         return Q.t()
 
+        # q = distributed_sinkhorn(student_out)
+        
         total_loss = 0
         n_loss_terms = 0
         for iq, q in enumerate(teacher_out):
