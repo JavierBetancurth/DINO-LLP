@@ -126,7 +126,7 @@ def get_args_parser():
     # Sinkhorn Knopp parameters
     parser.add_argument("--epsilon", default=0.05, type=float,
        help="regularization parameter for Sinkhorn-Knopp algorithm")
-    parser.add_argument("--sinkhorn_iterations", default=3, type=int,
+    parser.add_argument("--n_iterations", default=3, type=int,
        help="number of iterations in Sinkhorn-Knopp algorithm")
     parser.add_argument("--nmb_prototypes", default=10, type=int,
        help="number of prototypes")
