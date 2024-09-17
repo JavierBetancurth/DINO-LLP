@@ -518,7 +518,7 @@ class DINOLoss(nn.Module):
         self.center = self.center * self.center_momentum + batch_center * (1 - self.center_momentum)
         
 @torch.no_grad()
-def sinkhorn_knopp_proportions(self, output, class_proportions, epsilon, sinkhorn_iterations):
+def sinkhorn_knopp_proportions(output, class_proportions, epsilon, sinkhorn_iterations):
     output = output.float()
     world_size = dist.get_world_size() if dist.is_initialized() else 1
     Q = torch.exp(output / epsilon).t()  # Q is K-by-B for consistency with notations from our paper
