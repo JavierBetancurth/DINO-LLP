@@ -36,7 +36,7 @@ def extract_feature_pipeline(args):
         pth_transforms.Normalize((0.3441, 0.3799, 0.4073), (0.2022, 0.1366, 0.1152)),  # (0.485, 0.456, 0.406), (0.229, 0.224, 0.225)
     ])  
     dataset_train = ReturnIndexDataset(os.path.join(args.data_path, "train"), transform=transform)
-    dataset_val = ReturnIndexDataset(os.path.join(args.data_path, "val"), transform=transform)
+    dataset_val = ReturnIndexDataset(os.path.join(args.data_path, "test"), transform=transform) #"val"
     sampler = torch.utils.data.DistributedSampler(dataset_train, shuffle=False)
     data_loader_train = torch.utils.data.DataLoader(
         dataset_train,
