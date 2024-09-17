@@ -330,6 +330,7 @@ def calculate_class_proportions_in_batch(labels, dataset):
     class_proportions = class_counts / len(labels)
     return class_proportions
 
+'''
 def compute_kl_loss_on_bagbatch(estimated_proportions, class_proportions, epsilon=1e-8):
     real_proportions = torch.tensor(class_proportions, dtype=torch.float32).cuda()
     
@@ -345,7 +346,7 @@ def compute_kl_loss_on_bagbatch(estimated_proportions, class_proportions, epsilo
     loss = torch.sum(-real_proportions * torch.log(avg_prob), dim=-1).mean()
     
     return loss
-
+'''
 def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loader,
                     optimizer, lr_schedule, wd_schedule, momentum_schedule,epoch,
                     fp16_scaler, dataset, args):  # se agrega la variable dataset
@@ -356,16 +357,10 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
     output_dim = args.out_dim
     prototypes_layer = Prototypes(output_dim, args.nmb_prototypes).cuda()
                         
-    # class_proportions_list = []  # lista para almacenar las proporciones de clase por lote
-                        
     for it, (images, labels) in enumerate(metric_logger.log_every(data_loader, 10, header)):
         
         # Calcular las proporciones de clase en el lote actual
-        class_proportions = calculate_class_proportions_in_batch(labels, dataset)
-        
-        # Calcular las proporciones de clase en el lote actual
-        # class_proportions = calculate_class_proportions_in_batch(labels, dataset)
-        # class_proportions_list.append(class_proportions)
+        real_proportions = calculate_class_proportions_in_batch(labels, dataset)
         
         # update weight decay and learning rate according to their schedule
         it = len(data_loader) * epoch + it  # global training iteration
@@ -519,6 +514,39 @@ class DINOLoss(nn.Module):
 
         # ema update
         self.center = self.center * self.center_momentum + batch_center * (1 - self.center_momentum)
+        
+@torch.no_grad()
+def sinkhorn_knopp_proportions(self, teacher_output, epsilon, n_iterations):
+    teacher_output = teacher_output.float()
+    world_size = dist.get_world_size() if dist.is_initialized() else 1
+    Q = torch.exp(teacher_output / epsilon).t()  # Q is K-by-B for consistency with notations from our paper
+    B = Q.shape[1] * world_size  # number of samples to assign
+    K = Q.shape[0]  # how many prototypes
+
+    # apply the constraint to the transportation polytope
+    constraint_matrix = torch.ones(K, B) * real_proportions.view(-1, 1)
+    Q *= constraint_matrix
+
+    # make the matrix sums to 1
+    sum_Q = torch.sum(Q)
+    if dist.is_initialized():
+        dist.all_reduce(sum_Q)
+    Q /= sum_Q
+
+    for it in range(n_iterations):
+        # normalize each row: total weight per prototype must be 1/K
+        sum_of_rows = torch.sum(Q, dim=1, keepdim=True)
+        if dist.is_initialized():
+            dist.all_reduce(sum_of_rows)
+        Q /= sum_of_rows
+        Q /= K
+
+        # normalize each column: total weight per sample must be 1/B
+        Q /= torch.sum(Q, dim=0, keepdim=True)
+        Q /= B
+
+    Q *= B  # the columns must sum to 1 so that Q is an assignment
+    return Q.t()
 
 '''
 class DINOLossdFPMm(nn.Module):
@@ -540,7 +568,7 @@ class DINOLossdFPMm(nn.Module):
         self.printed_info = False  # Flag to ensure printing only once
 
 
-    def forward(self, student_output, teacher_output, real_proportions, estimated_proportions, epoch, alpha=0.5, beta=0.5):
+    def forward(self, student_output, teacher_output, real_proportions, estimated_proportions, epoch, alpha=0.5, beta=0.5, epsilon=1e-8):
         """
         Cross-entropy between softmax outputs of the teacher and student networks.
         """
@@ -563,7 +591,7 @@ class DINOLossdFPMm(nn.Module):
                 loss1 = torch.sum(-q * F.log_softmax(student_out[v], dim=-1), dim=-1)
 
         # Aplicar distributed_sinkhorn para las proporciones y calcular la pérdida de KL
-        estimated_proportions = distributed_sinkhorn(student_output)
+        # estimated_proportions = distributed_sinkhorn(student_output)
         
         # Label proportions-based loss with symmetric cross entropy
         probabilities = nn.functional.softmax(estimated_proportions, dim=-1)
@@ -581,42 +609,7 @@ class DINOLossdFPMm(nn.Module):
         total_loss /= n_loss_terms
         self.update_center(teacher_output)
         return total_loss
-
-    # teacher_out_prototypes = Prototypes(teacher_output, numb_prototypes)
     
-    @torch.no_grad()
-    def sinkhorn_knopp_proportions(self, teacher_output, epsilon, n_iterations):
-        teacher_output = teacher_output.float()
-        world_size = dist.get_world_size() if dist.is_initialized() else 1
-        Q = torch.exp(teacher_output / epsilon).t()  # Q is K-by-B for consistency with notations from our paper
-        B = Q.shape[1] * world_size  # number of samples to assign
-        K = Q.shape[0]  # how many prototypes
-
-        # apply the constraint to the transportation polytope
-        constraint_matrix = torch.ones(K, B) * real_proportions.view(-1, 1)
-        Q *= constraint_matrix
-
-        # make the matrix sums to 1
-        sum_Q = torch.sum(Q)
-        if dist.is_initialized():
-            dist.all_reduce(sum_Q)
-        Q /= sum_Q
-
-        for it in range(n_iterations):
-            # normalize each row: total weight per prototype must be 1/K
-            sum_of_rows = torch.sum(Q, dim=1, keepdim=True)
-            if dist.is_initialized():
-                dist.all_reduce(sum_of_rows)
-            Q /= sum_of_rows
-            Q /= K
-
-            # normalize each column: total weight per sample must be 1/B
-            Q /= torch.sum(Q, dim=0, keepdim=True)
-            Q /= B
-
-        Q *= B  # the columns must sum to 1 so that Q is an assignment
-        return Q.t()
-        
     @torch.no_grad()
     def update_center(self, teacher_output):
         """
@@ -628,7 +621,7 @@ class DINOLossdFPMm(nn.Module):
 
         # ema update
         self.center = self.center * self.center_momentum + batch_center * (1 - self.center_momentum)
-'''
+ '''       
 
 class DataAugmentationDINO(object):
     def __init__(self, global_crops_scale, local_crops_scale, local_crops_number):
