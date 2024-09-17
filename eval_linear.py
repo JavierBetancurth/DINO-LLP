@@ -68,7 +68,7 @@ def eval_linear(args):
         pth_transforms.ToTensor(),
         pth_transforms.Normalize((0.3441, 0.3799, 0.4073), (0.2022, 0.1366, 0.1152)), # (0.485, 0.456, 0.406), (0.229, 0.224, 0.225)
     ])
-    dataset_val = datasets.ImageFolder(os.path.join(args.data_path, "val"), transform=val_transform)
+    dataset_val = datasets.ImageFolder(os.path.join(args.data_path, "test"), transform=val_transform) # "val"
     val_loader = torch.utils.data.DataLoader(
         dataset_val,
         batch_size=args.batch_size_per_gpu,
