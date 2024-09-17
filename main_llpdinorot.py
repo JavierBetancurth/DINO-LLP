@@ -535,7 +535,7 @@ def sinkhorn_knopp_proportions(self, output, class_proportions, epsilon, sinkhor
         dist.all_reduce(sum_Q)
     Q /= sum_Q
 
-    for it in range(n_iterations):
+    for it in range(sinkhorn_iterations):
         # normalize each row: total weight per prototype must be 1/K
         sum_of_rows = torch.sum(Q, dim=1, keepdim=True)
         if dist.is_initialized():
