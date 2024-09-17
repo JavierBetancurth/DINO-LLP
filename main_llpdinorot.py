@@ -380,7 +380,7 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
             # prototypes_output = prototypes_layer(student_output)
 
             # Aplicar distributed_sinkhorn para las proporciones y calcular la pérdida de KL
-            prototypes_output = sinkhorn_knopp_proportions(student_output, class_proportions, args.epsilon, args.sinkhorn_iterations)
+            prototypes_output = sinkhorn_knopp_teacher(teacher_output, args.teacher_temp, args.n_iterations)
             
             # Calcular la pérdida KL
             loss2 = compute_kl_loss_on_bagbatch(prototypes_output, class_proportions, epsilon=1e-8)
@@ -517,38 +517,37 @@ class DINOLoss(nn.Module):
         # ema update
         self.center = self.center * self.center_momentum + batch_center * (1 - self.center_momentum)
         
-@torch.no_grad()
-def sinkhorn_knopp_proportions(output, class_proportions, epsilon, sinkhorn_iterations):
-    output = output.float()
-    world_size = dist.get_world_size() if dist.is_initialized() else 1
-    Q = torch.exp(output / epsilon).t()  # Q is K-by-B for consistency with notations from our paper
-    B = Q.shape[1] * world_size  # number of samples to assign
-    K = Q.shape[0]  # how many prototypes
+def sinkhorn_knopp_teacher(teacher_output, teacher_temp, n_iterations):
+        teacher_output = teacher_output.float()
+        world_size = dist.get_world_size() if dist.is_initialized() else 1
+        Q = torch.exp(teacher_output / teacher_temp).t()  # Q is K-by-B for consistency with notations from our paper
+        B = Q.shape[1] * world_size  # number of samples to assign
+        K = Q.shape[0]  # how many prototypes
 
-    # apply the constraint to the transportation polytope
-    constraint_matrix = torch.ones(K, B) * class_proportions.view(-1, 1)
-    Q *= constraint_matrix
+        # apply the constraint to the transportation polytope
+        # constraint_matrix = torch.ones(K, B) * class_proportions.view(-1, 1)
+        # Q *= constraint_matrix
 
-    # make the matrix sums to 1
-    sum_Q = torch.sum(Q)
-    if dist.is_initialized():
-        dist.all_reduce(sum_Q)
-    Q /= sum_Q
-
-    for it in range(sinkhorn_iterations):
-        # normalize each row: total weight per prototype must be 1/K
-        sum_of_rows = torch.sum(Q, dim=1, keepdim=True)
+        # make the matrix sums to 1
+        sum_Q = torch.sum(Q)
         if dist.is_initialized():
-            dist.all_reduce(sum_of_rows)
-        Q /= sum_of_rows
-        Q /= K
+            dist.all_reduce(sum_Q)
+        Q /= sum_Q
 
-        # normalize each column: total weight per sample must be 1/B
-        Q /= torch.sum(Q, dim=0, keepdim=True)
-        Q /= B
+        for it in range(n_iterations):
+            # normalize each row: total weight per prototype must be 1/K
+            sum_of_rows = torch.sum(Q, dim=1, keepdim=True)
+            if dist.is_initialized():
+                dist.all_reduce(sum_of_rows)
+            Q /= sum_of_rows
+            Q /= K
 
-    Q *= B  # the columns must sum to 1 so that Q is an assignment
-    return Q.t()
+            # normalize each column: total weight per sample must be 1/B
+            Q /= torch.sum(Q, dim=0, keepdim=True)
+            Q /= B
+
+        Q *= B  # the columns must sum to 1 so that Q is an assignment
+        return Q.t()   
 
 class DataAugmentationDINO(object):
     def __init__(self, global_crops_scale, local_crops_scale, local_crops_number):
