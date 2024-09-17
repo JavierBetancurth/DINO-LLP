@@ -354,7 +354,7 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
 
     # Crear una instancia de Prototypes fuera del bucle
     output_dim = args.out_dim
-    prototypes_layer = Prototypes(output_dim, args.nmb_prototypes).cuda()
+    prototypes_layer = Prototypes(output_dim, args.nmb_prototypes).cuda()                
                         
     for it, (images, labels) in enumerate(metric_logger.log_every(data_loader, 10, header)):
         
