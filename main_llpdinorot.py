@@ -378,7 +378,7 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
 
 
             # Aplicar distributed_sinkhorn para las proporciones y calcular la pérdida de KL
-            prototypes = sinkhorn_knopp_teacher(student_output, student_temp=0.1, n_iterations=args.n_iterations)
+            prototypes = sinkhorn_knopp_teacher(teacher_output, teacher_temp=teacher_temp, n_iterations=args.n_iterations)
 
             # Paso a través de la capa de Prototipos
             prototypes_output = prototypes_layer(prototypes)
@@ -522,10 +522,10 @@ class DINOLoss(nn.Module):
         self.center = self.center * self.center_momentum + batch_center * (1 - self.center_momentum)
 
 @torch.no_grad()
-def sinkhorn_knopp_teacher(student_output, student_temp, n_iterations):
-        student_output = student_output.float()
+def sinkhorn_knopp_teacher(teacher_output, teacher_temp, n_iterations):
+        teacher_output = teacher_output.float()
         world_size = dist.get_world_size() if dist.is_initialized() else 1
-        Q = torch.exp(student_output / student_temp).t()  # Q is K-by-B for consistency with notations from our paper
+        Q = torch.exp(teacher_output / teacher_temp).t()  # Q is K-by-B for consistency with notations from our paper
         B = Q.shape[1] * world_size  # number of samples to assign
         K = Q.shape[0]  # how many prototypes
 
