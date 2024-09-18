@@ -1,24 +1,27 @@
-import torch
-import torch.nn as nn
-
 class Prototypes(nn.Module):
     def __init__(self, output_dim, nmb_prototypes=0, init_weights=True):
         super(Prototypes, self).__init__()
 
         self.prototypes = None
+        # Si nmb_prototypes es una lista, usaremos MultiPrototypes
         if isinstance(nmb_prototypes, list):
             self.prototypes = MultiPrototypes(output_dim, nmb_prototypes)
+        # Si nmb_prototypes es mayor que 0, usamos una capa lineal
         elif nmb_prototypes > 0:
             self.prototypes = nn.Linear(output_dim, nmb_prototypes, bias=False)
+        # Si nmb_prototypes es 0, podemos manejar este caso con una excepción o asignación especial
+        else:
+            raise ValueError("El número de prototipos debe ser mayor que 0 o una lista.")
 
         if init_weights:
             self._initialize_weights()
 
     def forward(self, output_dim):
+        # Asegurarse de que prototypes está definido
         if self.prototypes is not None:
             prototypes = self.prototypes(output_dim)
         else:
-            prototypes = self.prototype_layer(output_dim)
+            raise ValueError("La capa de prototipos no está definida correctamente.")
         return prototypes
 
     def _initialize_weights(self):
@@ -28,16 +31,3 @@ class Prototypes(nn.Module):
             elif isinstance(m, (nn.BatchNorm2d, nn.GroupNorm)):
                 nn.init.constant_(m.weight, 1)
                 nn.init.constant_(m.bias, 0)
-
-class MultiPrototypes(nn.Module):
-    def __init__(self, output_dim, nmb_prototypes_list):
-        super(MultiPrototypes, self).__init__()
-        self.nmb_heads = len(nmb_prototypes_list)
-        for i, nmb_prototypes in enumerate(nmb_prototypes_list):
-            self.add_module("prototypes" + str(i), nn.Linear(output_dim, nmb_prototypes, bias=False))
-
-    def forward(self, x):
-        out = []
-        for i in range(self.nmb_heads):
-            out.append(getattr(self, "prototypes" + str(i))(x))
-        return out
