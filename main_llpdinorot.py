@@ -553,6 +553,10 @@ def sinkhorn_knopp_teacher(teacher_output, teacher_temp, n_iterations):
         return Q.t()   
 
 def compute_relax_ent(F, z, alpha=0.5, epsilon=1e-8, niter=100):
+    # Convertir z a un tensor de PyTorch si es un ndarray y expandir si es necesario
+    if isinstance(z, np.ndarray):
+        z = torch.tensor(z, dtype=torch.float32)
+
     # Dimensiones de la entrada
     n, K = F.shape
 
