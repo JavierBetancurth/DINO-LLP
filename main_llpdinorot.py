@@ -553,31 +553,42 @@ def sinkhorn_knopp_teacher(teacher_output, teacher_temp, n_iterations):
         return Q.t()   
 
 def compute_relax_ent(F, z, alpha=0.5, epsilon=1e-8, niter=100):
-    # Convertir z a un tensor de PyTorch si es un ndarray y expandir si es necesario
+    # Convertir z a un tensor de PyTorch si es un ndarray
     if isinstance(z, np.ndarray):
         z = torch.tensor(z, dtype=torch.float32)
+    
     if z.dim() == 1:
-        z = z.unsqueeze(0)  # Expande z a [1, K] si es necesario
+        z = z.unsqueeze(0)  # Asegúrate de que z sea [1, K]
 
     n, K = F.shape  # Aquí F es de [640, 10]
     
-    # Expande z para que sea de tamaño [1, 10], compatible con F
-    z = z.unsqueeze(0)  # Asegúrate de que z sea [1, K]
+    # Expande z para que sea de tamaño [n, K] usando broadcasting
+    z = z.expand(n, -1)  # Expande z a [640, 10]
 
     tau = (1 + alpha * epsilon / (1 - alpha)) ** -1
     b = torch.ones(K, device=F.device) / n  # Inicializamos b con tamaño [10]
 
     for _ in range(niter):
-        # Cambia la operación de multiplicación para asegurar la compatibilidad de dimensiones
+        # Calcula F_b como [640, 10]
         F_b = F @ b  # F @ b será [640, 10]
-        a = (n * z / (F_b + epsilon)) ** tau  # Evita la división por cero
-        b = (1 / n) * (F.t() @ a.squeeze())  # Actualiza b con dimensiones [10]
-        U = torch.diag(a.squeeze()) @ F @ torch.diag(b)  # Cálculo de U
+
+        # Cambia la operación de división para asegurar la compatibilidad de dimensiones
+        a = (n * z / (F_b + epsilon)) ** tau  # z expandido a [640, 10]
+        a = torch.clamp(a, min=epsilon)  # Evita valores extremadamente pequeños en `a`
+
+        # Actualiza b con dimensiones [10]
+        b = (1 / n) * (F.t() @ a.sum(dim=0))  # Calcula `a.sum(dim=0)` para que la dimensión sea [10]
+        
+        # Calcula U
+        U = torch.diag(a.sum(dim=0)) @ F @ torch.diag(b)  # Cálculo de U
     
     # Calcular la entropía de U
     H_U = -torch.sum(U * torch.log(U + epsilon))
-    kl_divergence = torch.sum(a.squeeze() * (torch.log(a.squeeze() + epsilon) - torch.log(b + epsilon)))
+    
+    # Calcular la divergencia KL
+    kl_divergence = torch.sum(a.sum(dim=0) * (torch.log(a.sum(dim=0) + epsilon) - torch.log(b + epsilon)))
 
+    # Pérdida final
     loss = alpha * H_U + (1 - alpha) * kl_divergence
     return loss
 
