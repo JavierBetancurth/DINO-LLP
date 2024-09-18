@@ -553,37 +553,27 @@ def sinkhorn_knopp_teacher(teacher_output, teacher_temp, n_iterations):
         return Q.t()   
 
 def compute_relax_ent(F, z, alpha=0.5, epsilon=1e-8, niter=100):
-    # Convertir z a un tensor de PyTorch si es un ndarray y expandir si es necesario
+     # Convertir z a un tensor de PyTorch si es un ndarray y expandir si es necesario
     if isinstance(z, np.ndarray):
         z = torch.tensor(z, dtype=torch.float32)
-
-    # Dimensiones de la entrada
-    n, K = F.shape
-
-    # Paso 1: Ajuste de F con epsilon
-    F = F ** (1 / epsilon)
-
-    # Paso 2: Calcular tau
+    n, K = F.shape  # Aquí F es de [640, 10]
+    
+    # Expande z para que sea de tamaño [1, 10], compatible con F
+    z = z.unsqueeze(0)
+    
     tau = (1 + alpha * epsilon / (1 - alpha)) ** -1
+    b = torch.ones(n, device=F.device) / n  # Inicializamos b con tamaño [640]
 
-    # Paso 3: Inicializar b
-    b = torch.ones(K, device=F.device) / n  # b debe ser del tamaño de las columnas de F
-
-    # Paso 4: Iterar para ajustar a y b
     for _ in range(niter):
-        # Paso 5: Calcular a
-        a = (n * z / (F @ b)) ** tau
-        # Paso 6: Actualizar b
-        b = (1 / n) * (F.T @ a)
+        # Kb será de tamaño [640] y z es de [1, 10], por lo que se necesita broadcast
+        a = (n * z / (F @ b.unsqueeze(-1))) ** tau  # F @ b será [640, 10]
+        b = (1 / n) * (F.t() @ a.squeeze())  # Actualiza b con dimensiones [10]
+        U = torch.diag(a.squeeze()) @ F @ torch.diag(b)  # Calculo de U
     
-    # Paso 7: Calcular U
-    U = torch.diag(a) @ F @ torch.diag(b)
-    
-    # Calcular entropía y divergencia KL
+    # Calcular la entropía de U
     H_U = -torch.sum(U * torch.log(U + epsilon))
-    kl_divergence = torch.sum(a * (torch.log(a + epsilon) - torch.log(b + epsilon)))
+    kl_divergence = torch.sum(a.squeeze() * (torch.log(a.squeeze() + epsilon) - torch.log(b + epsilon)))
 
-    # Calcular la pérdida total
     loss = alpha * H_U + (1 - alpha) * kl_divergence
     return loss
 
