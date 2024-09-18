@@ -147,8 +147,6 @@ def get_args_parser():
     parser.add_argument("--local_rank", default=0, type=int, help="Please ignore and do not set this argument.")
     return parser
 
-torch.autograd.set_detect_anomaly(True)
-
 def train_dino(args):
     utils.init_distributed_mode(args)
     utils.fix_random_seeds(args.seed)
@@ -522,7 +520,8 @@ class DINOLoss(nn.Module):
 
         # ema update
         self.center = self.center * self.center_momentum + batch_center * (1 - self.center_momentum)
-        
+
+@torch.no_grad()
 def sinkhorn_knopp_teacher(student_output, student_temp, n_iterations):
         student_output = student_output.float()
         world_size = dist.get_world_size() if dist.is_initialized() else 1
