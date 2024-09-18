@@ -527,7 +527,7 @@ def sinkhorn_knopp_teacher(prototypes, teacher_temp, n_iterations):
         Q = torch.exp(prototypes / teacher_temp).t()  # Q is K-by-B for consistency with notations from our paper
         B = Q.shape[1] * world_size  # number of samples to assign
         K = Q.shape[0]  # how many prototypes
-        print(K)
+        # print(K)
 
         # apply the constraint to the transportation polytope
         # constraint_matrix = torch.ones(K, B) * class_proportions.view(-1, 1)
