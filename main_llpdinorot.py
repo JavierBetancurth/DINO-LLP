@@ -375,15 +375,16 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
             teacher_output = teacher(images[:2])
             student_output = student(images)
             loss1 = dino_loss(student_output, teacher_output, epoch)
-            
-            # Paso a través de la capa de Prototipos
-            prototypes_output = prototypes_layer(student_output)
+
 
             # Aplicar distributed_sinkhorn para las proporciones y calcular la pérdida de KL
-            # prototypes_output = sinkhorn_knopp_teacher(teacher_output, args.teacher_temp, args.n_iterations)
-            
+            prototypes = sinkhorn_knopp_teacher(student_output, args.student_temp, args.n_iterations)
+
+            # Paso a través de la capa de Prototipos
+            prototypes_output = prototypes_layer(prototypes)
+
             # Calcular la pérdida KL
-            # loss2 = compute_kl_loss_on_bagbatch(prototypes_output, class_proportions, epsilon=1e-8)
+            loss2 = compute_kl_loss_on_bagbatch(prototypes_output, class_proportions, epsilon=1e-8)
             # Convertir prototypes_output a proporciones reales y calcular la pérdida KL
             prototypes_proportions = torch.sum(prototypes_output, dim=0) / torch.sum(prototypes_output)
             loss2 = compute_relax_ent(prototypes_proportions, class_proportions, epsilon=1e-8)
@@ -551,7 +552,7 @@ def sinkhorn_knopp_teacher(teacher_output, teacher_temp, n_iterations):
 
         Q *= B  # the columns must sum to 1 so that Q is an assignment
         return Q.t()   
-
+'''
 def compute_relax_ent(F, z, alpha=0.5, epsilon=1e-8, niter=100):
     # Convertir z a un tensor de PyTorch si es un ndarray
     if isinstance(z, np.ndarray):
@@ -591,7 +592,7 @@ def compute_relax_ent(F, z, alpha=0.5, epsilon=1e-8, niter=100):
     # Pérdida final
     loss = alpha * H_U + (1 - alpha) * kl_divergence
     return loss
-
+'''
 class DataAugmentationDINO(object):
     def __init__(self, global_crops_scale, local_crops_scale, local_crops_number):
         flip_and_color_jitter = transforms.Compose([
