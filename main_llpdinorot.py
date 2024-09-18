@@ -331,7 +331,12 @@ def calculate_class_proportions_in_batch(labels, dataset):
     return class_proportions
 
 def compute_kl_loss_on_bagbatch(estimated_proportions, class_proportions, epsilon=1e-8):
-    real_proportions = torch.tensor(class_proportions, dtype=torch.float32).cuda()
+    if not isinstance(class_proportions, torch.Tensor):
+        real_proportions = torch.tensor(class_proportions, dtype=torch.float32).cuda()
+    else:
+        real_proportions = class_proportions
+    
+    # real_proportions = torch.tensor(class_proportions, dtype=torch.float32).cuda()
     
     # Calcular las probabilidades y la pérdida KL
     probabilities = F.softmax(estimated_proportions, dim=-1)
