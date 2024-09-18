@@ -377,13 +377,14 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
             loss1 = dino_loss(student_output, teacher_output, epoch)
             
             # Paso a través de la capa de Prototipos
-            # prototypes_output = prototypes_layer(student_output)
+            prototypes_output = prototypes_layer(student_output)
 
             # Aplicar distributed_sinkhorn para las proporciones y calcular la pérdida de KL
-            prototypes_output = sinkhorn_knopp_teacher(teacher_output, args.teacher_temp, args.n_iterations)
+            # prototypes_output = sinkhorn_knopp_teacher(teacher_output, args.teacher_temp, args.n_iterations)
             
             # Calcular la pérdida KL
-            loss2 = compute_kl_loss_on_bagbatch(prototypes_output, class_proportions, epsilon=1e-8)
+            # loss2 = compute_kl_loss_on_bagbatch(prototypes_output, class_proportions, epsilon=1e-8)
+            loss2 = compute_relax_ent(prototypes_output, class_proportions, epsilon=1e-8)
             
             # Combinar las pérdidas usando el parámetro alpha
             loss = args.alpha * loss1 + (1 - args.alpha) * loss2
@@ -548,6 +549,22 @@ def sinkhorn_knopp_teacher(teacher_output, teacher_temp, n_iterations):
 
         Q *= B  # the columns must sum to 1 so that Q is an assignment
         return Q.t()   
+
+def compute_relax_ent(F, z, alpha=0.5, epsilon=1e-8, niter=100):
+    n, K = F.shape
+    tau = (1 + alpha * epsilon / (1 - alpha)) ** -1
+    b = torch.ones(n) / n
+
+    for _ in range(niter):
+        a = (n * z / (F @ b)) ** tau
+        b = (1 / n) * (F.T @ a)
+        U = torch.diag(a) @ F @ torch.diag(b)
+    
+    H_U = -torch.sum(U * torch.log(U + epsilon))
+    kl_divergence = torch.sum(a * (torch.log(a + epsilon) - torch.log(b + epsilon)))
+
+    loss = alpha * H_U + (1 - alpha) * kl_divergence
+    return loss
 
 class DataAugmentationDINO(object):
     def __init__(self, global_crops_scale, local_crops_scale, local_crops_number):
