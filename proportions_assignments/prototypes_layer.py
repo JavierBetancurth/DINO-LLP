@@ -50,10 +50,10 @@ class Prototypes(nn.Module):
         if init_weights:
             self._initialize_weights()
 
-    def forward(self, output_dim):
+    def forward(self, x):
         # Asegurarse de que prototypes está definido
         if self.prototypes is not None:
-            prototypes = self.prototypes(output_dim)
+            prototypes = self.prototypes(x)
         else:
             raise ValueError("La capa de prototipos no está definida correctamente.")
         return prototypes
