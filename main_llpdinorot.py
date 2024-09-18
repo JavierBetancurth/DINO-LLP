@@ -147,6 +147,8 @@ def get_args_parser():
     parser.add_argument("--local_rank", default=0, type=int, help="Please ignore and do not set this argument.")
     return parser
 
+torch.autograd.set_detect_anomaly(True)
+
 def train_dino(args):
     utils.init_distributed_mode(args)
     utils.fix_random_seeds(args.seed)
@@ -378,7 +380,7 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
 
 
             # Aplicar distributed_sinkhorn para las proporciones y calcular la pérdida de KL
-            prototypes = sinkhorn_knopp_teacher(student_output,  student_temp=0.1, n_iterations=args.n_iterations)
+            prototypes = sinkhorn_knopp_teacher(student_output, student_temp=0.1, n_iterations=args.n_iterations)
 
             # Paso a través de la capa de Prototipos
             prototypes_output = prototypes_layer(prototypes)
