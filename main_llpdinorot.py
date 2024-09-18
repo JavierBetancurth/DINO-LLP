@@ -521,8 +521,8 @@ class DINOLoss(nn.Module):
         self.center = self.center * self.center_momentum + batch_center * (1 - self.center_momentum)
 
 @torch.no_grad()
-def sinkhorn_knopp_teacher(teacher_output, teacher_temp, n_iterations):
-        teacher_output = teacher_output.float()
+def sinkhorn_knopp_teacher(prototypes, teacher_temp, n_iterations):
+        prototypes = prototypes.float()
         world_size = dist.get_world_size() if dist.is_initialized() else 1
         Q = torch.exp(teacher_output / teacher_temp).t()  # Q is K-by-B for consistency with notations from our paper
         B = Q.shape[1] * world_size  # number of samples to assign
