@@ -556,7 +556,7 @@ def compute_relax_ent(F, z, alpha=0.5, epsilon=1e-8, niter=100):
     # Determina el dispositivo de F y asegura que todos los demás tensores estén en el mismo dispositivo
     device = F.device
     
-    n, K = F.shape
+    n, K = F.shape  # n es el número de filas y K es el número de columnas
     tau = (1 + alpha * epsilon / (1 - alpha)) ** -1
 
     # Convertir z a un tensor de PyTorch si es un ndarray
@@ -564,13 +564,12 @@ def compute_relax_ent(F, z, alpha=0.5, epsilon=1e-8, niter=100):
         z = torch.tensor(z, dtype=torch.float32)
 
     # Mover 'b' y 'z' al mismo dispositivo que F
-    b = (torch.ones(n) / n).to(device)
+    b = (torch.ones(K) / K).to(device)  # Cambiar b a tamaño (K,)
     z = z.to(device)
 
     for _ in range(niter):
-        # Mover todos los tensores a 'device'
-        a = (n * z / (F @ b)) ** tau
-        b = (1 / n) * (F.T @ a)
+        a = (n * z / (F @ b)) ** tau  # Ahora la multiplicación será válida
+        b = (1 / n) * (F.T @ a)  # F.T tiene tamaño (K, n), a tiene tamaño (n,)
 
         # Crear la matriz U con 'a' y 'b' en el dispositivo correcto
         U = torch.diag(a) @ F @ torch.diag(b)
