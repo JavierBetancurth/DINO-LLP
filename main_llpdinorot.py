@@ -385,7 +385,7 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
             prototypes = prototypes_layer(student_output)
 
             # Aplicar distributed_sinkhorn para las proporciones y calcular la pérdida de KL
-            prototypes_output = sinkhorn_knopp_teacher(prototypes, temp=0.1, n_iterations=args.n_iterations)
+            prototypes_output = sinkhorn_knopp(prototypes, temp=0.1, n_iterations=args.n_iterations)
 
             # Calcular la pérdida KL
             loss2 = compute_kl_loss_on_bagbatch(prototypes_output, class_proportions, epsilon=1e-8)
@@ -526,7 +526,7 @@ class DINOLoss(nn.Module):
         self.center = self.center * self.center_momentum + batch_center * (1 - self.center_momentum)
 
 @torch.no_grad()
-def sinkhorn_knopp_teacher(prototypes, temp, n_iterations):
+def sinkhorn_knopp(prototypes, temp, n_iterations):
         prototypes = prototypes.float()
         # print(prototypes.shape)
         world_size = dist.get_world_size() if dist.is_initialized() else 1
