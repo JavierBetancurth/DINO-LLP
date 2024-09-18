@@ -1,3 +1,6 @@
+import torch.nn as nn
+import torch.nn.functional as F
+
 '''
 class Prototypes(nn.Module):
     def __init__(self, output_dim, nmb_prototypes=0, init_weights=True):
