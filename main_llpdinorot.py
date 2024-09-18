@@ -376,12 +376,11 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
             student_output = student(images)
             loss1 = dino_loss(student_output, teacher_output, epoch)
 
+            # Paso a través de la capa de Prototipos
+            prototypes = prototypes_layer(teacher_output)
 
             # Aplicar distributed_sinkhorn para las proporciones y calcular la pérdida de KL
-            prototypes = sinkhorn_knopp_teacher(teacher_output, teacher_temp=args.teacher_temp, n_iterations=args.n_iterations)
-
-            # Paso a través de la capa de Prototipos
-            prototypes_output = prototypes_layer(prototypes)
+            prototypes_output = sinkhorn_knopp_teacher(prototypes, teacher_temp=args.teacher_temp, n_iterations=args.n_iterations)
 
             # Calcular la pérdida KL
             loss2 = compute_kl_loss_on_bagbatch(prototypes_output, class_proportions, epsilon=1e-8)
