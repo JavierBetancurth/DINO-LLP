@@ -523,6 +523,7 @@ class DINOLoss(nn.Module):
 @torch.no_grad()
 def sinkhorn_knopp_teacher(prototypes, teacher_temp, n_iterations):
         prototypes = prototypes.float()
+        print(prototypes.shape)
         world_size = dist.get_world_size() if dist.is_initialized() else 1
         Q = torch.exp(prototypes / teacher_temp).t()  # Q is K-by-B for consistency with notations from our paper
         B = Q.shape[1] * world_size  # number of samples to assign
