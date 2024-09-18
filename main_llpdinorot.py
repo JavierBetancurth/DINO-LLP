@@ -553,32 +553,33 @@ def sinkhorn_knopp_teacher(teacher_output, teacher_temp, n_iterations):
         return Q.t()   
 
 def compute_relax_ent(F, z, alpha=0.5, epsilon=1e-8, niter=100):
-    # Determina el dispositivo de F y asegura que todos los demás tensores estén en el mismo dispositivo
-    device = F.device
-    
-    n, K = F.shape  # n es el número de filas y K es el número de columnas
+    # Dimensiones de la entrada
+    n, K = F.shape
+
+    # Paso 1: Ajuste de F con epsilon
+    F = F ** (1 / epsilon)
+
+    # Paso 2: Calcular tau
     tau = (1 + alpha * epsilon / (1 - alpha)) ** -1
 
-    # Convertir z a un tensor de PyTorch si es un ndarray
-    if isinstance(z, np.ndarray):
-        z = torch.tensor(z, dtype=torch.float32)
+    # Paso 3: Inicializar b
+    b = torch.ones(K, device=F.device) / n  # b debe ser del tamaño de las columnas de F
 
-    # Mover 'b' y 'z' al mismo dispositivo que F
-    b = (torch.ones(K) / K).to(device)  # Cambiar b a tamaño (K,)
-    z = z.to(device)
-
+    # Paso 4: Iterar para ajustar a y b
     for _ in range(niter):
-        a = (n * z / (F @ b)) ** tau  # Ahora la multiplicación será válida
-        b = (1 / n) * (F.T @ a)  # F.T tiene tamaño (K, n), a tiene tamaño (n,)
-
-        # Crear la matriz U con 'a' y 'b' en el dispositivo correcto
-        U = torch.diag(a) @ F @ torch.diag(b)
+        # Paso 5: Calcular a
+        a = (n * z / (F @ b)) ** tau
+        # Paso 6: Actualizar b
+        b = (1 / n) * (F.T @ a)
     
-    # Calcular la entropía y la divergencia KL
+    # Paso 7: Calcular U
+    U = torch.diag(a) @ F @ torch.diag(b)
+    
+    # Calcular entropía y divergencia KL
     H_U = -torch.sum(U * torch.log(U + epsilon))
     kl_divergence = torch.sum(a * (torch.log(a + epsilon) - torch.log(b + epsilon)))
 
-    # Calcular la pérdida final
+    # Calcular la pérdida total
     loss = alpha * H_U + (1 - alpha) * kl_divergence
     return loss
 
