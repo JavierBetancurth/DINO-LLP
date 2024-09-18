@@ -384,6 +384,8 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
             
             # Calcular la pérdida KL
             # loss2 = compute_kl_loss_on_bagbatch(prototypes_output, class_proportions, epsilon=1e-8)
+            # Convertir prototypes_output a proporciones reales y calcular la pérdida KL
+            prototypes_proportions = torch.sum(prototypes_output, dim=0) / torch.sum(prototypes_output)
             loss2 = compute_relax_ent(prototypes_output, class_proportions, epsilon=1e-8)
             
             # Combinar las pérdidas usando el parámetro alpha
@@ -557,6 +559,10 @@ def compute_relax_ent(F, z, alpha=0.5, epsilon=1e-8, niter=100):
     n, K = F.shape
     tau = (1 + alpha * epsilon / (1 - alpha)) ** -1
 
+    # Convertir z a un tensor de PyTorch si es un ndarray
+    if isinstance(z, np.ndarray):
+        z = torch.tensor(z, dtype=torch.float32)
+
     # Mover 'b' y 'z' al mismo dispositivo que F
     b = (torch.ones(n) / n).to(device)
     z = z.to(device)
@@ -576,7 +582,6 @@ def compute_relax_ent(F, z, alpha=0.5, epsilon=1e-8, niter=100):
     # Calcular la pérdida final
     loss = alpha * H_U + (1 - alpha) * kl_divergence
     return loss
-
 
 class DataAugmentationDINO(object):
     def __init__(self, global_crops_scale, local_crops_scale, local_crops_number):
