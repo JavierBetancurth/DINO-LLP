@@ -378,7 +378,7 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
 
 
             # Aplicar distributed_sinkhorn para las proporciones y calcular la pérdida de KL
-            prototypes = sinkhorn_knopp_teacher(student_output,  student_temp=0.1, args.n_iterations)
+            prototypes = sinkhorn_knopp_teacher(student_output,  student_temp=0.1, n_iterations=args.n_iterations)
 
             # Paso a través de la capa de Prototipos
             prototypes_output = prototypes_layer(prototypes)
