@@ -551,20 +551,32 @@ def sinkhorn_knopp_teacher(teacher_output, teacher_temp, n_iterations):
         return Q.t()   
 
 def compute_relax_ent(F, z, alpha=0.5, epsilon=1e-8, niter=100):
+    # Determina el dispositivo de F y asegura que todos los demás tensores estén en el mismo dispositivo
+    device = F.device
+    
     n, K = F.shape
     tau = (1 + alpha * epsilon / (1 - alpha)) ** -1
-    b = torch.ones(n) / n
+
+    # Mover 'b' y 'z' al mismo dispositivo que F
+    b = (torch.ones(n) / n).to(device)
+    z = z.to(device)
 
     for _ in range(niter):
+        # Mover todos los tensores a 'device'
         a = (n * z / (F @ b)) ** tau
         b = (1 / n) * (F.T @ a)
+
+        # Crear la matriz U con 'a' y 'b' en el dispositivo correcto
         U = torch.diag(a) @ F @ torch.diag(b)
     
+    # Calcular la entropía y la divergencia KL
     H_U = -torch.sum(U * torch.log(U + epsilon))
     kl_divergence = torch.sum(a * (torch.log(a + epsilon) - torch.log(b + epsilon)))
 
+    # Calcular la pérdida final
     loss = alpha * H_U + (1 - alpha) * kl_divergence
     return loss
+
 
 class DataAugmentationDINO(object):
     def __init__(self, global_crops_scale, local_crops_scale, local_crops_number):
