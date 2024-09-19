@@ -333,7 +333,7 @@ def calculate_class_proportions_in_batch(labels, dataset):
 
 def calculate_class_proportions_in_dataset(dataset):
     # Obtener todas las etiquetas del dataset
-    all_labels = torch.tensor(dataset.targets)  # Convertir a tensor de PyTorch
+    all_labels = torch.tensor(dataset.targets).cuda()  # Convertir a tensor de PyTorch
 
     # Contar el número de instancias por clase
     class_counts = torch.bincount(all_labels, minlength=len(dataset.classes))
