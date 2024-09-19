@@ -401,7 +401,7 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
             prototypes = prototypes_layer(student_output)
 
             # Aplicar distributed_sinkhorn para las proporciones y calcular la pérdida de KL
-            prototypes_output = sinkhorn_knopp(prototypes, temp=0.1, n_iterations=args.n_iterations, entropy_weight=0.1)
+            prototypes_output = sinkhorn_knopp(prototypes, temp=args.epsilon, n_iterations=args.n_iterations)
 
             # Calcular la pérdida KL
             loss2 = compute_kl_loss_on_bagbatch(prototypes_output, class_proportions, epsilon=1e-8)
@@ -544,7 +544,7 @@ class DINOLoss(nn.Module):
         self.center = self.center * self.center_momentum + batch_center * (1 - self.center_momentum)
 
 @torch.no_grad()
-def sinkhorn_knopp(prototypes, temp, n_iterations, entropy_weight=0.1):
+def sinkhorn_knopp(prototypes, temp, n_iterations):
         prototypes = prototypes.float()
         # print(prototypes.shape)
         world_size = dist.get_world_size() if dist.is_initialized() else 1
@@ -570,13 +570,6 @@ def sinkhorn_knopp(prototypes, temp, n_iterations, entropy_weight=0.1):
             # normalize each column: total weight per sample must be 1/B
             Q /= torch.sum(Q, dim=0, keepdim=True)
             Q /= B
-    
-            # Apply entropy regularization
-            entropy = -torch.sum(Q * torch.log(Q + 1e-8))  # add small epsilon to avoid log(0)
-            entropy_loss = entropy_weight * entropy / Q.numel()
-    
-            # Adjust the matrix with the entropy loss
-            Q *= torch.exp(entropy_loss / temp)
 
         Q *= B  # the columns must sum to 1 so that Q is an assignment
         return Q.t()   
