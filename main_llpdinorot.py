@@ -323,12 +323,27 @@ def train_dino(args):
     total_time_str = str(datetime.timedelta(seconds=int(total_time)))
     print('Training time {}'.format(total_time_str))
 
-
-# J
+'''
+# Calcular las proporciones de cada lote
 def calculate_class_proportions_in_batch(labels, dataset):
     class_counts = np.bincount(labels, minlength=len(dataset.classes))
     class_proportions = class_counts / len(labels)
     return class_proportions
+'''
+
+def calculate_class_proportions_in_dataset(dataset):
+    # Obtener todas las etiquetas del dataset
+    all_labels = dataset.targets  # Asume que esto es un tensor de PyTorch
+
+    # Contar el número de instancias por clase
+    class_counts = torch.bincount(all_labels, minlength=len(dataset.classes))
+
+    # Calcular las proporciones globales
+    total_samples = len(all_labels)
+    class_proportions = class_counts.float() / total_samples
+
+    return class_proportions
+
 
 def compute_kl_loss_on_bagbatch(estimated_proportions, class_proportions, epsilon=1e-8):
     if not isinstance(class_proportions, torch.Tensor):
@@ -364,7 +379,8 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
     for it, (images, labels) in enumerate(metric_logger.log_every(data_loader, 10, header)):
         
         # Calcular las proporciones de clase en el lote actual
-        class_proportions = calculate_class_proportions_in_batch(labels, dataset)
+        # class_proportions = calculate_class_proportions_in_batch(labels, dataset)
+        class_proportions = calculate_class_proportions_in_dataset(dataset)
         
         # update weight decay and learning rate according to their schedule
         it = len(data_loader) * epoch + it  # global training iteration
@@ -394,7 +410,9 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
             # loss2 = compute_relax_ent(prototypes_proportions, class_proportions, epsilon=1e-8)
             
             # Combinar las pérdidas usando el parámetro alpha
-            loss = args.alpha * loss1 + (1 - args.alpha) * loss2
+            # loss = args.alpha * loss1 + (1 - args.alpha) * loss2
+            loss = loss1 + args.alpha * loss2
+            
         
         # Cálculo de la precisión de clasificación
         # accuracy = calculate_accuracy(student_output, labels)
@@ -526,7 +544,7 @@ class DINOLoss(nn.Module):
         self.center = self.center * self.center_momentum + batch_center * (1 - self.center_momentum)
 
 @torch.no_grad()
-def sinkhorn_knopp(prototypes, temp, n_iterations):
+def sinkhorn_knopp(prototypes, temp, n_iterations, entropy_weight=0.1):
         prototypes = prototypes.float()
         # print(prototypes.shape)
         world_size = dist.get_world_size() if dist.is_initialized() else 1
@@ -534,10 +552,6 @@ def sinkhorn_knopp(prototypes, temp, n_iterations):
         B = Q.shape[1] * world_size  # number of samples to assign
         K = Q.shape[0]  # how many prototypes
         # print(K)
-
-        # apply the constraint to the transportation polytope
-        # constraint_matrix = torch.ones(K, B) * class_proportions.view(-1, 1)
-        # Q *= constraint_matrix
 
         # make the matrix sums to 1
         sum_Q = torch.sum(Q)
@@ -556,6 +570,13 @@ def sinkhorn_knopp(prototypes, temp, n_iterations):
             # normalize each column: total weight per sample must be 1/B
             Q /= torch.sum(Q, dim=0, keepdim=True)
             Q /= B
+    
+            # Apply entropy regularization
+            entropy = -torch.sum(Q * torch.log(Q + 1e-8))  # add small epsilon to avoid log(0)
+            entropy_loss = entropy_weight * entropy / Q.numel()
+    
+            # Adjust the matrix with the entropy loss
+            Q *= torch.exp(entropy_loss / temp)
 
         Q *= B  # the columns must sum to 1 so that Q is an assignment
         return Q.t()   
