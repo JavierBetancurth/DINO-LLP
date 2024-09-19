@@ -410,10 +410,8 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
             # loss2 = compute_relax_ent(prototypes_proportions, class_proportions, epsilon=1e-8)
             
             # Combinar las pérdidas usando el parámetro alpha
-            # loss = args.alpha * loss1 + (1 - args.alpha) * loss2
-            loss = loss1 + args.alpha * loss2
+            loss = args.alpha * loss1 + (1 - args.alpha) * loss2
             
-        
         # Cálculo de la precisión de clasificación
         # accuracy = calculate_accuracy(student_output, labels)
         
