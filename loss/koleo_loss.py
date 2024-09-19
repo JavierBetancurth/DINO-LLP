@@ -11,9 +11,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 # import torch.distributed as dist
-
-
-logger = logging.getLogger("dinov2")
+# logger = logging.getLogger("dinov2")
 
 
 class KoLeoLoss(nn.Module):
