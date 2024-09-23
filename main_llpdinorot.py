@@ -412,7 +412,7 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
             # loss = args.alpha * loss1 + (1 - args.alpha) * loss2
 
             # Incrementa el peso de la pérdida KL
-            loss_total = loss_dino + args.alpha * loss_kl
+            loss = loss1 + args.alpha * loss2
 
             
         # Cálculo de la precisión de clasificación
