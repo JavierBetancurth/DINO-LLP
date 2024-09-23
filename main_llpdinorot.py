@@ -428,13 +428,6 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
             print("student output shape:", student_output.shape)
             print("student output type:", student_output.dtype)
 
-        # Al final de cada iteración
-        if it % 10 == 0:  # Imprimir cada 10 iteraciones
-            # print(f"Iteración: {it}, Pérdida DINO: {loss1.item()}, Pérdida KL: {loss2.item()}")
-            print("Prototipos después de Sinkhorn:", prototypes_output)
-            avg_prob = F.softmax(prototypes_output, dim=-1).mean(dim=0).cpu().numpy()  # Calcular la probabilidad promedio
-            print(f"Proporciones estimadas promedio: {avg_prob}")
-
         # student update
         optimizer.zero_grad()
         param_norms = None
@@ -473,6 +466,10 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
     # gather the stats from all processes
     metric_logger.synchronize_between_processes()
     print("Averaged stats:", metric_logger)
+                        
+    # Print class proportions and estimated proportions at the end of the epoch
+    print("Proporciones de clase reales:", class_proportions)
+    print("Proporciones estimadas después de Sinkhorn:", prototypes_output)
 
     # Print class proportions
     # for i, proportions in enumerate(class_proportions_list):
