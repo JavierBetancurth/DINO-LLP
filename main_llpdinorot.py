@@ -349,7 +349,10 @@ def compute_kl_loss_on_bagbatch(estimated_proportions, class_proportions, epsilo
 
     # Asegurarse de que estimated_proportions también esté en la misma GPU
     # estimated_proportions = estimated_proportions.cuda() if not estimated_proportions.is_cuda else estimated_proportions
-    
+
+    # Forzar la normalización manualmente 
+    # estimated_proportions /= estimated_proportions.sum()
+
     # Calcular las probabilidades y la pérdida KL
     probabilities = F.softmax(estimated_proportions, dim=-1)
     avg_prob = torch.mean(probabilities, dim=0)
