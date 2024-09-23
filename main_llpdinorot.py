@@ -172,11 +172,13 @@ def train_dino(args):
         pin_memory=True,
         drop_last=True,
     )
+
+    labels = dataset.targets
     '''
     
     # Genera un muestreo basado en la distribución de Dirichlet 
     # (Un valor del parametro alpha pequeño hará que la distribución sea más desigual, mientras que un valor mayor de alpha hará que la distribución sea más uniforme.)
-    data_loader = create_dataloader(
+    data_loader, labels = create_dataloader(
     data_path=args.data_path,
     transform=transform,
     batch_size=args.batch_size_per_gpu,
@@ -185,8 +187,6 @@ def train_dino(args):
     num_classes=10  # Número de clases
     )
     
-    labels = dataset.targets
-
     print(f"Data loaded: there are {len(dataset)} images.")
 
     # ============ building student and teacher networks ... ============
