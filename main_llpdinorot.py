@@ -161,6 +161,7 @@ def train_dino(args):
         args.local_crops_number,
     )
 
+    '''
     dataset = datasets.ImageFolder(args.data_path, transform=transform)
     sampler = torch.utils.data.DistributedSampler(dataset, shuffle=True)
     data_loader = torch.utils.data.DataLoader(
@@ -171,10 +172,18 @@ def train_dino(args):
         pin_memory=True,
         drop_last=True,
     )
+    '''
     
-    # dataset = datasets.ImageFolder(args.data_path, transform=transform)
-    # prueba datasets
-    #dataset = torchvision.datasets.CIFAR10(root=".", train=True,  transform=transform, download=True)
+    # Genera un muestreo basado en la distribución de Dirichlet 
+    # (Un valor del parametro alpha pequeño hará que la distribución sea más desigual, mientras que un valor mayor de alpha hará que la distribución sea más uniforme.)
+    data_loader = create_dataloader(
+    data_path=args.data_path,
+    transform=transform,
+    batch_size=args.batch_size_per_gpu,
+    num_workers=args.num_workers,
+    alpha=0.5,  # Parámtero de Dirichlet
+    num_classes=10  # Número de clases
+    )
     
     labels = dataset.targets
 
