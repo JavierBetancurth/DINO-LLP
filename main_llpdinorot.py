@@ -356,10 +356,10 @@ def compute_kl_loss_on_bagbatch(estimated_proportions, class_proportions, epsilo
     avg_prob = torch.clamp(avg_prob, epsilon, 1 - epsilon)
 
     # Ignorar las clases con proporciones reales de cero
-    mask = real_proportions > 0 # [mask]
+    # mask = real_proportions > 0 # [mask]
     
     # Calcular la pérdida KL utilizando las proporciones del lote
-    loss = torch.sum(-real_proportions[mask] * torch.log(avg_prob[mask]), dim=-1).mean()
+    loss = torch.sum(-real_proportions * torch.log(avg_prob), dim=-1).mean()
     
     return loss
 
@@ -409,7 +409,11 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
             # loss2 = compute_relax_ent(prototypes_proportions, class_proportions, epsilon=1e-8)
             
             # Combinar las pérdidas usando el parámetro alpha
-            loss = args.alpha * loss1 + (1 - args.alpha) * loss2
+            # loss = args.alpha * loss1 + (1 - args.alpha) * loss2
+
+            # Incrementa el peso de la pérdida KL
+            loss_total = loss_dino + args.alpha * loss_kl
+
             
         # Cálculo de la precisión de clasificación
         # accuracy = calculate_accuracy(student_output, labels)
@@ -469,7 +473,7 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
                         
     # Print class proportions and estimated proportions at the end of the epoch
     print("Proporciones de clase reales:", class_proportions)
-    print("Proporciones estimadas después de Sinkhorn:", prototypes_output)
+    # print("Proporciones estimadas después de Sinkhorn:", prototypes_output)
     # Calcular y imprimir las proporciones promedio estimadas
     avg_estimated_proportions = torch.mean(prototypes_output, dim=0)
     print("Proporciones promedio estimadas:", avg_estimated_proportions.cpu().numpy())
