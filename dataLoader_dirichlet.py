@@ -51,8 +51,8 @@ def create_dataloader(data_path, transform, batch_size, num_workers, alpha, num_
         drop_last=True,
     )
     
-    print(f"Data loaded: there are {len(selected_indices)} images sampled.")
-    return data_loader
+    # print(f"Data loaded: there are {len(selected_indices)} images sampled.")
+    return data_loader, labels
 
 '''
 # ============ Uso de la función ============
