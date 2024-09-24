@@ -351,7 +351,7 @@ def compute_kl_loss_on_bagbatch(estimated_proportions, class_proportions, epsilo
     # estimated_proportions = estimated_proportions.cuda() if not estimated_proportions.is_cuda else estimated_proportions
 
     # Forzar la normalización manualmente 
-    # estimated_proportions /= estimated_proportions.sum()
+    estimated_proportions /= estimated_proportions.sum(dim=-1, keepdim=True)
 
     # Calcular las probabilidades y la pérdida KL
     probabilities = F.softmax(estimated_proportions, dim=-1)
@@ -365,7 +365,7 @@ def compute_kl_loss_on_bagbatch(estimated_proportions, class_proportions, epsilo
     loss = torch.sum(-real_proportions * torch.log(avg_prob), dim=-1)
     
     # Aplicar ponderación basada en las diferencias
-    weighted_loss = loss * (1 + differences)
+    weighted_loss = loss * torch.exp(differences)  # Escalar la pérdida según las diferencias
 
     # Ignorar las clases con proporciones reales de cero
     # mask = real_proportions > 0 # [mask]
