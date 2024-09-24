@@ -382,7 +382,7 @@ def compute_kl_loss_on_bagbatch(estimated_proportions, class_proportions, epsilo
     return weighted_loss.mean() # loss
 
 def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loader,
-                    optimizer, lr_schedule, wd_schedule, momentum_schedule,epoch,
+                    optimizer, lr_schedule, wd_schedule, momentum_schedule, epoch,
                     fp16_scaler, dataset, args):  # se agrega la variable dataset
     metric_logger = utils.MetricLogger(delimiter="  ")
     header = 'Epoch: [{}/{}]'.format(epoch, args.epochs)
