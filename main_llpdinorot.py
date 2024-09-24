@@ -365,21 +365,21 @@ def compute_kl_loss_on_bagbatch(estimated_proportions, class_proportions, epsilo
     avg_prob = torch.clamp(avg_prob, epsilon, 1 - epsilon)
     
     # Calcular diferencias entre proporciones reales y estimadas
-    differences = torch.abs(avg_prob - real_proportions)
+    # differences = torch.abs(avg_prob - real_proportions)
 
     # Ponderar la pérdida KL con base en las diferencias
     loss = torch.sum(-real_proportions * torch.log(avg_prob), dim=-1)
     
     # Aplicar ponderación basada en las diferencias
-    weighted_loss = loss * torch.exp(differences)  # Escalar la pérdida según las diferencias
+    # weighted_loss = loss * torch.exp(differences)  # Escalar la pérdida según las diferencias
 
     # Ignorar las clases con proporciones reales de cero
     # mask = real_proportions > 0 # [mask]
     
     # Calcular la pérdida KL utilizando las proporciones del lote
-    # loss = torch.sum(-real_proportions * torch.log(avg_prob), dim=-1).mean()
+    loss = torch.sum(-real_proportions * torch.log(avg_prob), dim=-1).mean()
     
-    return weighted_loss.mean() # loss
+    return loss # weighted_loss.mean() # loss
 
 def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loader,
                     optimizer, lr_schedule, wd_schedule, momentum_schedule, epoch,
@@ -429,10 +429,10 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
             # loss2 = compute_relax_ent(prototypes_proportions, class_proportions, epsilon=1e-8)
             
             # Combinar las pérdidas usando el parámetro alpha
-            # loss = args.alpha * loss1 + (1 - args.alpha) * loss2
+            loss = args.alpha * loss1 + (1 - args.alpha) * loss2
 
             # Incrementa el peso de la pérdida KL
-            loss = loss1 + args.alpha * loss2
+            # loss = loss1 + args.alpha * loss2
 
             
         # Cálculo de la precisión de clasificación
