@@ -494,7 +494,7 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
     # print("Proporciones estimadas después de Sinkhorn:", prototypes_output)
     # Calcular y imprimir las proporciones promedio estimadas
     avg_estimated_proportions = torch.mean(prototypes_output, dim=0)
-    print("Proporciones promedio estimadas:", avg_estimated_proportions.cpu().numpy())
+    print("Proporciones promedio estimadas:", avg_estimated_proportions)
 
     # Print class proportions
     # for i, proportions in enumerate(class_proportions_list):
