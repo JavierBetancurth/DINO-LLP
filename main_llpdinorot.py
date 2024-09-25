@@ -417,8 +417,11 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
             # Paso a través de la capa de Prototipos
             prototypes = prototypes_layer(student_output)
 
+            # Establecer la tolerancia basada en el número de clusters K
+            tolerance = (1 / K) * 0.1  
+
             # Aplicar distributed_sinkhorn para las proporciones y calcular la pérdida de KL
-            prototypes_output = sinkhorn_knopp(prototypes, temp=args.epsilon, n_iterations=args.n_iterations)
+            prototypes_output = sinkhorn_knopp(prototypes, temp=args.epsilon, n_iterations=args.n_iterations, wi=class_proportions, tolerance=tolerance)
             # Impresión de las proporciones estimadas
             # print("Prototipos después de Sinkhorn:", prototypes_output)
 
@@ -492,7 +495,7 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
     print("Averaged stats:", metric_logger)
                         
     # Print class proportions and estimated proportions at the end of the epoch
-    real_proportions = torch.tensor(class_proportions, dtype=torch.float32)
+    real_proportions = torch.tensor(class_proportions, dtype=torch.float32).cuda()
     print("Proporciones de clase reales:", real_proportions)
     # print("Proporciones estimadas después de Sinkhorn:", prototypes_output)
     # Calcular y imprimir las proporciones promedio estimadas
@@ -573,32 +576,41 @@ class DINOLoss(nn.Module):
         self.center = self.center * self.center_momentum + batch_center * (1 - self.center_momentum)
 
 @torch.no_grad()
-def sinkhorn_knopp(prototypes, temp, n_iterations):
+def sinkhorn_knopp(prototypes, temp, n_iterations, wi, tolerance):
         prototypes = prototypes.float()
         # print(prototypes.shape)
         world_size = dist.get_world_size() if dist.is_initialized() else 1
         Q = torch.exp(prototypes / temp).t()  # Q is K-by-B for consistency with notations from our paper
-        B = Q.shape[1] * world_size  # number of samples to assign
-        K = Q.shape[0]  # how many prototypes
+        B = Q.shape[1] * world_size  # Number of samples to assign
+        K = Q.shape[0]  # How many prototypes
         # print(K)
 
-        # make the matrix sums to 1
+        # Make the matrix sums to 1
         sum_Q = torch.sum(Q)
         if dist.is_initialized():
             dist.all_reduce(sum_Q)
         Q /= sum_Q
 
         for it in range(n_iterations):
-            # normalize each row: total weight per prototype must be 1/K
+            # Normalize each row: total weight per prototype must be 1/K
             sum_of_rows = torch.sum(Q, dim=1, keepdim=True)
             if dist.is_initialized():
                 dist.all_reduce(sum_of_rows)
             Q /= sum_of_rows
             Q /= K
 
-            # normalize each column: total weight per sample must be 1/B
+            # Normalize each column: total weight per sample must be 1/B
             Q /= torch.sum(Q, dim=0, keepdim=True)
             Q /= B
+
+            # Comprobar el error entre los marginales y las proporciones conocidas
+            r_estimated = torch.sum(Q, dim=1)  # Marginal estimated for prototypes
+            error = torch.abs(r_estimated - wi).mean()  # Calcular el error medio
+    
+            # Si el error es menor que la tolerancia, detener las iteraciones
+            if error < tolerance:
+                print(f"Stopping Sinkhorn at iteration {it} with error {error}")
+                break
 
         Q *= B  # the columns must sum to 1 so that Q is an assignment
         return Q.t()   
