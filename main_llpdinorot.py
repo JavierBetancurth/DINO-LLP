@@ -416,6 +416,10 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
             # Paso a través de la capa de Prototipos
             prototypes = prototypes_layer(student_output)
 
+            # Normalizar los prototipos antes de Sinkhorn-Knopp
+            with torch.no_grad():
+                prototypes = nn.functional.normalize(prototypes, dim=1, p=2)
+
             # Establecer la tolerancia basada en el número de clusters K
             K = args.nmb_prototypes
             tolerance = (1 / K) * 0.1  
