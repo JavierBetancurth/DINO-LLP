@@ -83,16 +83,20 @@ class Prototypes(nn.Module):
             self._initialize_weights()
 
     def forward(self, x, class_mask=None):
-        if self.prototypes is not None:
-            prototypes = self.prototypes(x)
-            
-            # Aplicar la máscara de clases si se proporciona
-            if class_mask is not None:
-                prototypes = prototypes[class_mask]
-            return prototypes
-        else:
-            raise ValueError("La capa de prototipos no está definida correctamente.")
-
+    if self.prototypes is not None:
+        prototypes = self.prototypes(x)
+        
+        # Aplicar la máscara de clases si se proporciona
+        if class_mask is not None:
+            if class_mask.shape[0] == prototypes.shape[1]:  # Verificar si coincide con el número de clases
+                # Aplicar la máscara a la segunda dimensión (clases)
+                prototypes = prototypes[:, class_mask]
+            else:
+                raise ValueError(f"La máscara de clase debe coincidir con el número de clases. Esperado: {prototypes.shape[1]}, encontrado: {class_mask.shape[0]}")
+                
+        return prototypes
+    else:
+        raise ValueError("La capa de prototipos no está definida correctamente.")
     def _initialize_weights(self):
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
