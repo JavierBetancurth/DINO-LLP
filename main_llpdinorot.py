@@ -322,14 +322,15 @@ def train_dino(args):
 
 # Calcular las proporciones de cada lote
 def calculate_class_proportions_in_batch(labels, dataset):
-    class_counts = np.bincount(labels, minlength=len(dataset.classes))
-    class_proportions = class_counts / len(labels)
+    labels_tensor = torch.tensor(labels, device='cuda')
+    class_counts = torch.bincount(labels_tensor, minlength=len(dataset.classes))
+    class_proportions = class_counts.float() / len(labels_tensor)
     return class_proportions
 
 
 def calculate_class_proportions_in_dataset(dataset):
     # Obtener todas las etiquetas del dataset
-    all_labels = torch.tensor(dataset.targets).cuda()  # Convertir a tensor de PyTorch
+    all_labels = torch.tensor(dataset.targets, device='cuda')  # Convertir a tensor de PyTorch
 
     # Contar el número de instancias por clase
     class_counts = torch.bincount(all_labels, minlength=len(dataset.classes))
@@ -584,7 +585,7 @@ def sinkhorn_knopp(prototypes, temp, n_iterations, wi, tolerance):
         Q = torch.exp(prototypes / temp).t()  # Q is K-by-B for consistency with notations from our paper
         B = Q.shape[1] * world_size  # Number of samples to assign
         K = Q.shape[0]  # How many prototypes
-        wi = wi.cuda()
+        # wi = wi.cuda()
         # print(K)
 
         # Make the matrix sums to 1
