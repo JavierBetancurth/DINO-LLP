@@ -31,7 +31,7 @@ class Prototypes(nn.Module):
                 nn.init.constant_(m.bias, 0) es necxesario hacer esto # Convertir prototypes_output a proporciones reales y calcular la pérdida KL
             prototypes_proportions = torch.sum(prototypes_output, dim=0) / torch.sum(prototypes_output)
 '''
-'''
+
 class Prototypes(nn.Module):
     def __init__(self, output_dim, nmb_prototypes=0, init_weights=True):
         super(Prototypes, self).__init__()
@@ -65,8 +65,8 @@ class Prototypes(nn.Module):
             elif isinstance(m, (nn.BatchNorm2d, nn.GroupNorm)):
                 nn.init.constant_(m.weight, 1)
                 nn.init.constant_(m.bias, 0)
-'''
 
+'''
 class Prototypes(nn.Module):
     def __init__(self, output_dim, nmb_prototypes=0, init_weights=True):
         super(Prototypes, self).__init__()
@@ -105,3 +105,4 @@ class Prototypes(nn.Module):
             elif isinstance(m, (nn.BatchNorm2d, nn.GroupNorm)):
                 nn.init.constant_(m.weight, 1)
                 nn.init.constant_(m.bias, 0)
+'''
