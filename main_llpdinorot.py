@@ -496,7 +496,7 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
                         
     # Imprimir proporciones estimadas y las proporciones reales al final de cada epoca
     real_proportions = class_proportions.clone().detach()  
-    print("Proporciones de clase reales:", real_proportions)
+    print("Proporciones de clases reales:", real_proportions)
     avg_estimated_proportions = torch.mean(prototypes_output, dim=0).clone().detach()
     print("Proporciones promedio estimadas:", avg_estimated_proportions)
 
