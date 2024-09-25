@@ -429,6 +429,8 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
             K = args.nmb_prototypes
             tolerance = (1 / K) * 0.1  
 
+            class_proportions = class_proportions[mask] 
+            
             # Aplicar distributed_sinkhorn para las proporciones y calcular la pérdida de KL
             prototypes_output = sinkhorn_knopp(prototypes, temp=args.epsilon, n_iterations=args.n_iterations, wi=class_proportions, tolerance=tolerance)
             # Impresión de las proporciones estimadas
