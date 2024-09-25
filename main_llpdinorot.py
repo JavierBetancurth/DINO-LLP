@@ -387,8 +387,7 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
     header = 'Epoch: [{}/{}]'.format(epoch, args.epochs)
 
     # Crear una instancia de Prototypes fuera del bucle
-    output_dim = args.out_dim
-    prototypes_layer = Prototypes(output_dim, args.nmb_prototypes).cuda()  
+    prototypes_layer = Prototypes(args.out_dim, args.nmb_prototypes).cuda()  
 
     # Calcular proporciones globales del dataset
     class_proportions_global = calculate_class_proportions_in_dataset(dataset)
@@ -414,7 +413,13 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
             loss1 = dino_loss(student_output, teacher_output, epoch)
 
             # Paso a través de la capa de Prototipos
-            prototypes = prototypes_layer(student_output)
+            # prototypes = prototypes_layer(student_output)
+
+            # Paso a través de la capa de Prototipos
+            real_proportions = torch.tensor(class_proportions, dtype=torch.float32).cuda()
+            # Ignorar las clases con proporciones reales de cero
+            mask = real_proportions > 0
+            prototypes = prototypes_layer(student_output, class_mask=mask)
 
             # Normalizar los prototipos antes de Sinkhorn-Knopp
             with torch.no_grad():
@@ -423,12 +428,6 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
             # Establecer la tolerancia basada en el número de clusters K
             K = args.nmb_prototypes
             tolerance = (1 / K) * 0.1  
-
-            # Llamar a la capa de prototipos
-            real_proportions = torch.tensor(class_proportions, dtype=torch.float32).cuda()
-            # Ignorar las clases con proporciones reales de cero
-            mask = real_proportions > 0
-            prototypes_output = prototypes_layer(x, class_mask=mask)
 
             # Aplicar distributed_sinkhorn para las proporciones y calcular la pérdida de KL
             prototypes_output = sinkhorn_knopp(prototypes, temp=args.epsilon, n_iterations=args.n_iterations, wi=class_proportions, tolerance=tolerance)
