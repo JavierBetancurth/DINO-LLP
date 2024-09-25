@@ -584,6 +584,7 @@ def sinkhorn_knopp(prototypes, temp, n_iterations, wi, tolerance):
         Q = torch.exp(prototypes / temp).t()  # Q is K-by-B for consistency with notations from our paper
         B = Q.shape[1] * world_size  # Number of samples to assign
         K = Q.shape[0]  # How many prototypes
+        wi = wi.cuda()
         # print(K)
 
         # Make the matrix sums to 1
