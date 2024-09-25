@@ -322,7 +322,7 @@ def train_dino(args):
 
 # Calcular las proporciones de cada lote
 def calculate_class_proportions_in_batch(labels, dataset):
-    labels_tensor = torch.tensor(labels, device='cuda')
+    labels_tensor = labels.clone().detach().cuda()
     class_counts = torch.bincount(labels_tensor, minlength=len(dataset.classes))
     class_proportions = class_counts.float() / len(labels_tensor)
     return class_proportions
@@ -330,11 +330,9 @@ def calculate_class_proportions_in_batch(labels, dataset):
 
 def calculate_class_proportions_in_dataset(dataset):
     # Obtener todas las etiquetas del dataset
-    all_labels = torch.tensor(dataset.targets, device='cuda')  # Convertir a tensor de PyTorch
-
+    all_labels = torch.tensor(dataset.targets).cuda() # Convertir a tensor de PyTorch
     # Contar el número de instancias por clase
     class_counts = torch.bincount(all_labels, minlength=len(dataset.classes))
-
     # Calcular las proporciones globales
     total_samples = len(all_labels)
     class_proportions = class_counts.float() / total_samples
