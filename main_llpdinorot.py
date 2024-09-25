@@ -373,10 +373,10 @@ def compute_kl_loss_on_bagbatch(estimated_proportions, class_proportions, epsilo
     # weighted_loss = loss * torch.exp(differences)  # Escalar la pérdida según las diferencias
 
     # Ignorar las clases con proporciones reales de cero
-    # mask = real_proportions > 0 # [mask]
+    mask = real_proportions > 0 # [mask]
     
     # Calcular la pérdida KL utilizando las proporciones del lote
-    loss = torch.sum(-real_proportions * torch.log(avg_prob), dim=-1).mean()
+    loss = torch.sum(-real_proportions[mask] * torch.log(avg_prob[mask]), dim=-1).mean()
     
     return loss # weighted_loss.mean() # loss
 
