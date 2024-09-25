@@ -424,6 +424,12 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
             K = args.nmb_prototypes
             tolerance = (1 / K) * 0.1  
 
+            # Llamar a la capa de prototipos
+            real_proportions = torch.tensor(class_proportions, dtype=torch.float32).cuda()
+            # Ignorar las clases con proporciones reales de cero
+            mask = real_proportions > 0
+            prototypes_output = prototypes_layer(x, class_mask=mask)
+
             # Aplicar distributed_sinkhorn para las proporciones y calcular la pérdida de KL
             prototypes_output = sinkhorn_knopp(prototypes, temp=args.epsilon, n_iterations=args.n_iterations, wi=class_proportions, tolerance=tolerance)
             # Impresión de las proporciones estimadas
