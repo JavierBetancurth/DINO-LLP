@@ -497,12 +497,12 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
     print("Averaged stats:", metric_logger)
                         
     # Print class proportions and estimated proportions at the end of the epoch
-    real_proportions = torch.tensor(class_proportions, dtype=torch.float32).cuda()
+    real_proportions = torch.tensor(class_proportions, dtype=torch.float32).cuda().clone().detach()
     print("Proporciones de clase reales:", real_proportions)
-    # print("Proporciones estimadas después de Sinkhorn:", prototypes_output)
     # Calcular y imprimir las proporciones promedio estimadas
-    avg_estimated_proportions = torch.mean(prototypes_output, dim=0)
+    avg_estimated_proportions = torch.mean(prototypes_output, dim=0).clone().detach()  # Asegurarse de que prototypes_output esté en el dispositivo correcto
     print("Proporciones promedio estimadas:", avg_estimated_proportions)
+
 
     # Print class proportions
     # for i, proportions in enumerate(class_proportions_list):
@@ -610,7 +610,7 @@ def sinkhorn_knopp(prototypes, temp, n_iterations, wi, tolerance):
             r_estimated = torch.sum(Q, dim=1)  # Marginal estimated for prototypes
             error = torch.abs(r_estimated - wi).mean()  # Calcular el error medio
     
-            # Si el error es menor que la tolerancia, detener las iteraciones
+            # Si el error es menor que la tolerancia detener las iteraciones
             if error < tolerance:
                 print(f"Stopping Sinkhorn at iteration {it} with error {error}")
                 break
