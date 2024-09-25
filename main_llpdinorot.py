@@ -418,6 +418,7 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
             prototypes = prototypes_layer(student_output)
 
             # Establecer la tolerancia basada en el número de clusters K
+            K = args.nmb_prototypes
             tolerance = (1 / K) * 0.1  
 
             # Aplicar distributed_sinkhorn para las proporciones y calcular la pérdida de KL
