@@ -373,10 +373,10 @@ def compute_kl_loss_on_bagbatch(estimated_proportions, class_proportions, epsilo
     # weighted_loss = loss * torch.exp(differences)  # Escalar la pérdida según las diferencias
 
     # Ignorar las clases con proporciones reales de cero
-    mask = real_proportions > 0 # [mask]
+    # mask = real_proportions > 0 # [mask]
     
     # Calcular la pérdida KL utilizando las proporciones del lote
-    loss = torch.sum(-real_proportions[mask] * torch.log(avg_prob[mask]), dim=-1).mean()
+    loss = torch.sum(-real_proportions * torch.log(avg_prob), dim=-1).mean()
     
     return loss # weighted_loss.mean() # loss
 
@@ -413,14 +413,16 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
             loss1 = dino_loss(student_output, teacher_output, epoch)
 
             # Paso a través de la capa de Prototipos
-            # prototypes = prototypes_layer(student_output)
+            prototypes = prototypes_layer(student_output)
 
+            '''
             # Paso a través de la capa de Prototipos
             real_proportions = torch.tensor(class_proportions, dtype=torch.float32).cuda()
             # Ignorar las clases con proporciones reales de cero
             mask = real_proportions > 0
             prototypes = prototypes_layer(student_output, class_mask=mask)
-
+            '''
+            
             # Normalizar los prototipos antes de Sinkhorn-Knopp
             with torch.no_grad():
                 prototypes = nn.functional.normalize(prototypes, dim=1, p=2)
@@ -428,8 +430,6 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
             # Establecer la tolerancia basada en el número de clusters K
             K = args.nmb_prototypes
             tolerance = (1 / K) * 0.1  
-
-            class_proportions = class_proportions[mask] 
             
             # Aplicar distributed_sinkhorn para las proporciones y calcular la pérdida de KL
             prototypes_output = sinkhorn_knopp(prototypes, temp=args.epsilon, n_iterations=args.n_iterations, wi=class_proportions, tolerance=tolerance)
