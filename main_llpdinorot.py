@@ -444,6 +444,17 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
         print(f"Batch {it} - Proporciones estimadas: {torch.mean(prototypes_output, dim=0).cpu().numpy()}")
         # print(f"Batch {it} - Pérdida DINO: {loss1.item()}, Pérdida KL: {loss2.item()}, Pérdida Total: {loss.item()}")
 
+        # **Monitoreo de los prototipos**
+        if it % 10 == 0:  # Imprimir cada 10 iteraciones
+            with torch.no_grad():
+                print(f"Iteración {it} - Prototipos actuales (primeras 5 filas): {prototypes_layer.prototypes.weight[:5].cpu().numpy()}")
+                
+            # Monitorear gradientes de los prototipos
+            if prototypes_layer.prototypes.weight.grad is not None:
+                print(f"Gradientes de prototipos en iteración {it} (primeras 5 filas): {prototypes_layer.prototypes.weight.grad[:5].cpu().numpy()}")
+            else:
+                print(f"Gradientes de prototipos en iteración {it}: No se están actualizando los gradientes.")
+
         if not math.isfinite(loss.item()):
             print("Loss is {}, stopping training".format(loss.item()), force=True)
             sys.exit(1)
