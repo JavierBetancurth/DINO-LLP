@@ -243,11 +243,12 @@ def train_dino(args):
         args.epochs,
     ).cuda()
 
-    # ============ preparing optimizer ... ============
-    params_groups = utils.get_params_groups(student)
-
     # Crear la capa de prototipos ANTES de configurar el optimizador
     prototypes_layer = Prototypes(output_dim=args.out_dim, nmb_prototypes=args.nmb_prototypes).cuda()
+
+    # ============ preparing optimizer ... ============
+    params_groups = utils.get_params_groups(student)
+    
     # Incluir los parámetros de la capa de prototipos
     params_groups += [{'params': prototypes_layer.parameters()}]
 
