@@ -245,6 +245,10 @@ def train_dino(args):
 
     # ============ preparing optimizer ... ============
     params_groups = utils.get_params_groups(student)
+
+    # Incluir los parámetros de la capa de prototipos
+    params_groups += [{'params': prototypes_layer.parameters()}]
+
     if args.optimizer == "adamw":
         optimizer = torch.optim.AdamW(params_groups)  # to use with ViTs
     elif args.optimizer == "sgd":
@@ -415,8 +419,7 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
             prototypes = prototypes_layer(student_output)
             
             # Normalizar los prototipos antes de Sinkhorn-Knopp
-            with torch.no_grad():
-                prototypes = nn.functional.normalize(prototypes, dim=1, p=2)
+            prototypes = nn.functional.normalize(prototypes, dim=1, p=2)
 
             # Establecer la tolerancia basada en el número de clusters K
             K = args.nmb_prototypes
@@ -445,7 +448,7 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
         # print(f"Batch {it} - Pérdida DINO: {loss1.item()}, Pérdida KL: {loss2.item()}, Pérdida Total: {loss.item()}")
 
         # **Monitoreo de los prototipos**
-        if it % 10 == 0:  # Imprimir cada 10 iteraciones
+        if it % 50 == 0:  # Imprimir cada 50 iteraciones
             with torch.no_grad():
                 print(f"Iteración {it} - Prototipos actuales (primeras 5 filas): {prototypes_layer.prototypes.weight[:5].cpu().numpy()}")
                 
