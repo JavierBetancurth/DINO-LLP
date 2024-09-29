@@ -327,7 +327,6 @@ def calculate_class_proportions_in_batch(labels, dataset):
     class_proportions = class_counts.float() / len(labels_tensor)
     return class_proportions
 
-
 def calculate_class_proportions_in_dataset(dataset):
     # Obtener todas las etiquetas del dataset
     all_labels = torch.tensor(dataset.targets, dtype=torch.long, device='cuda') # Usar directamente y mover a CUDA
@@ -350,7 +349,7 @@ def compute_kl_loss_on_bagbatch(estimated_proportions, class_proportions, epsilo
     # estimated_proportions = estimated_proportions.cuda() if not estimated_proportions.is_cuda else estimated_proportions
 
     # Forzar la normalización manualmente 
-    estimated_proportions /= estimated_proportions.sum(dim=-1, keepdim=True)
+    # estimated_proportions /= estimated_proportions.sum(dim=-1, keepdim=True)
 
     '''
     # Si se utiliza la salida de la capa de prototipos
@@ -414,14 +413,6 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
 
             # Paso a través de la capa de Prototipos
             prototypes = prototypes_layer(student_output)
-
-            '''
-            # Paso a través de la capa de Prototipos
-            real_proportions = torch.tensor(class_proportions, dtype=torch.float32).cuda()
-            # Ignorar las clases con proporciones reales de cero
-            mask = real_proportions > 0
-            prototypes = prototypes_layer(student_output, class_mask=mask)
-            '''
             
             # Normalizar los prototipos antes de Sinkhorn-Knopp
             with torch.no_grad():
@@ -448,12 +439,15 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
             # Incrementa el peso de la pérdida KL
             loss = loss1 + args.alpha * loss2
 
-            
-        # Cálculo de la precisión de clasificación
-        # accuracy = calculate_accuracy(student_output, labels)
-        
-        # Registro de la precisión junto con las pérdidas y otras métricas
-        # metric_logger.update(accuracy=accuracy)
+        # **Actualización de los prototipos** (aquí es donde se actualizan los prototipos con backprop)
+        prototypes_layer.zero_grad()  # Asegurarse de que los gradientes se reseteen
+        prototypes_output.backward()  # Backpropagation a través de los prototipos
+        prototypes_layer.step()  # Actualizar los prototipos usando gradientes calculados
+
+        # Logging para monitorizar
+        print(f"Batch {it} - Proporciones reales: {class_proportions}")
+        print(f"Batch {it} - Proporciones estimadas: {torch.mean(prototypes_output, dim=0).cpu().numpy()}")
+        # print(f"Batch {it} - Pérdida DINO: {loss1.item()}, Pérdida KL: {loss2.item()}, Pérdida Total: {loss.item()}")
 
         if not math.isfinite(loss.item()):
             print("Loss is {}, stopping training".format(loss.item()), force=True)
@@ -504,7 +498,8 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
     # gather the stats from all processes
     metric_logger.synchronize_between_processes()
     print("Averaged stats:", metric_logger)
-                        
+
+    '''
     # Imprimir proporciones estimadas y las proporciones reales al final de cada epoca
     # Calcular proporciones globales del dataset
     class_proportions_global = calculate_class_proportions_in_dataset(dataset)
@@ -513,12 +508,7 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
     print("Proporciones de clases reales lote:", real_proportions)
     avg_estimated_proportions = torch.mean(prototypes_output, dim=0).clone().detach()
     print("Proporciones promedio estimadas:", avg_estimated_proportions)
-
-
-    # Print class proportions
-    # for i, proportions in enumerate(class_proportions_list):
-        # print(f"Proporciones de clase en lote {i}: {proportions}")
-                   
+    '''
     return {k: meter.global_avg for k, meter in metric_logger.meters.items()}
 
 class DINOLoss(nn.Module):
