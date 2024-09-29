@@ -246,6 +246,8 @@ def train_dino(args):
     # ============ preparing optimizer ... ============
     params_groups = utils.get_params_groups(student)
 
+    # Crear la capa de prototipos ANTES de configurar el optimizador
+    prototypes_layer = Prototypes(output_dim=args.out_dim, nmb_prototypes=args.nmb_prototypes).cuda()
     # Incluir los parámetros de la capa de prototipos
     params_groups += [{'params': prototypes_layer.parameters()}]
 
@@ -385,12 +387,12 @@ def compute_kl_loss_on_bagbatch(estimated_proportions, class_proportions, epsilo
 
 def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loader,
                     optimizer, lr_schedule, wd_schedule, momentum_schedule, epoch,
-                    fp16_scaler, dataset, args):  # se agrega la variable dataset
+                    fp16_scaler, dataset, prototypes_layer, args):  # se agrega la variable dataset
     metric_logger = utils.MetricLogger(delimiter="  ")
     header = 'Epoch: [{}/{}]'.format(epoch, args.epochs)
 
     # Crear una instancia de Prototypes fuera del bucle
-    prototypes_layer = Prototypes(args.out_dim, args.nmb_prototypes).cuda()  
+    # prototypes_layer = Prototypes(args.out_dim, args.nmb_prototypes).cuda()  
 
     # Calcular proporciones globales del dataset
     class_proportions_global = calculate_class_proportions_in_dataset(dataset)
