@@ -439,11 +439,6 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
             # Incrementa el peso de la pérdida KL
             loss = loss1 + args.alpha * loss2
 
-        # **Actualización de los prototipos** (aquí es donde se actualizan los prototipos con backprop)
-        prototypes_layer.zero_grad()  # Asegurarse de que los gradientes se reseteen
-        prototypes_output.backward()  # Backpropagation a través de los prototipos
-        prototypes_layer.step()  # Actualizar los prototipos usando gradientes calculados
-
         # Logging para monitorizar
         print(f"Batch {it} - Proporciones reales: {class_proportions}")
         print(f"Batch {it} - Proporciones estimadas: {torch.mean(prototypes_output, dim=0).cpu().numpy()}")
