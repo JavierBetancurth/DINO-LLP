@@ -447,8 +447,8 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
             loss = loss1 + args.alpha * loss2
 
         # Logging para monitorizar
-        print(f"Batch {it} - Proporciones reales: {class_proportions}")
-        print(f"Batch {it} - Proporciones estimadas: {torch.mean(prototypes_output, dim=0).cpu().numpy()}")
+        # print(f"Batch {it} - Proporciones reales: {class_proportions}")
+        # print(f"Batch {it} - Proporciones estimadas: {torch.mean(prototypes_output, dim=0).cpu().numpy()}")
         # print(f"Batch {it} - Pérdida DINO: {loss1.item()}, Pérdida KL: {loss2.item()}, Pérdida Total: {loss.item()}")
 
         # imprimir información de las salidas (solo una vez)
