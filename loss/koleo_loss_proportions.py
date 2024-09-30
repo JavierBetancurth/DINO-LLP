@@ -16,7 +16,7 @@ import torch.nn.functional as F
 logger = logging.getLogger("DINO")
 
 
-class KoLeoLoss(nn.Module):
+class KoLeoLossProportions(nn.Module):
     """Kozachenko-Leonenko entropic loss regularizer from Sablayrolles et al. - 2018 - Spreading vectors for similarity search"""
 
     def __init__(self):
