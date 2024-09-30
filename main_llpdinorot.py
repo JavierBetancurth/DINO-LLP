@@ -251,7 +251,7 @@ def train_dino(args):
     # koleo loss
     koLeo_loss_fn = KoLeoLoss()
     # proportion loss
-    proportion_loss_fn = ProportionLoss(metric=metric, alpha=alpha)
+    proportion_loss_fn = ProportionLoss(metric="ce", alpha=args.alpha)
     
     # ============ preparing optimizer ... ============
     params_groups = utils.get_params_groups(student)
@@ -437,8 +437,7 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
             # Convertir prototypes_output a proporciones reales y calcular la pérdida KL
             # loss2 = compute_kl_loss_on_bagbatch(prototypes_output, class_proportions_global, epsilon=1e-8)
             # Calcula las pérdidas
-            metric = "ce"  # "l1", "mse"
-            loss2 = ProportionLoss(student_output, class_proportions, metric=metric, alpha=args.alpha)  # Cambia a "l1" o "mse" si es necesario
+            loss2 = ProportionLoss(student_output, class_proportions)
 
             # Calcula la pérdida KoLeo
             loss3 = koLeo_loss_fn(student_output)
