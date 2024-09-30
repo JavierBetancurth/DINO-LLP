@@ -305,7 +305,7 @@ def train_dino(args):
         # ============ training one epoch of DINO ... ============
         train_stats = train_one_epoch(student, teacher, teacher_without_ddp, dino_loss,
             data_loader, optimizer, lr_schedule, wd_schedule, momentum_schedule,
-            epoch, fp16_scaler, dataset, prototypes_layer, args)   # se agrega la variable dataset y prototypes_layer
+            epoch, fp16_scaler, dataset, prototypes_layer, koLeo_loss_fn, args)   # se agrega la variable dataset, prototypes_layer y koLeo_loss_fn
 
         # ============ writing logs ... ============
         save_dict = {
@@ -393,7 +393,7 @@ def compute_kl_loss_on_bagbatch(estimated_proportions, class_proportions, epsilo
 
 def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loader,
                     optimizer, lr_schedule, wd_schedule, momentum_schedule, epoch,
-                    fp16_scaler, dataset, prototypes_layer, args):  # se agrega la variable dataset y prototypes_layer
+                    fp16_scaler, dataset, prototypes_layer, koLeo_loss_fn, args):  # se agrega la variable dataset, prototypes_layer y koLeo_loss_fn
     metric_logger = utils.MetricLogger(delimiter="  ")
     header = 'Epoch: [{}/{}]'.format(epoch, args.epochs)
 
