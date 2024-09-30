@@ -244,13 +244,13 @@ def train_dino(args):
     ).cuda()
 
     # Crear la capa de prototipos ANTES de configurar el optimizador
-    prototypes_layer = Prototypes(output_dim=args.out_dim, nmb_prototypes=args.nmb_prototypes).cuda()
+    # prototypes_layer = Prototypes(output_dim=args.out_dim, nmb_prototypes=args.nmb_prototypes).cuda()
 
     # ============ preparing optimizer ... ============
     params_groups = utils.get_params_groups(student)
     
     # Incluir los parámetros de la capa de prototipos
-    params_groups += [{'params': prototypes_layer.parameters()}]
+    # params_groups += [{'params': prototypes_layer.parameters()}]
 
     if args.optimizer == "adamw":
         optimizer = torch.optim.AdamW(params_groups)  # to use with ViTs
@@ -301,7 +301,7 @@ def train_dino(args):
         # ============ training one epoch of DINO ... ============
         train_stats = train_one_epoch(student, teacher, teacher_without_ddp, dino_loss,
             data_loader, optimizer, lr_schedule, wd_schedule, momentum_schedule,
-            epoch, fp16_scaler, dataset, prototypes_layer, args)   # se agrega la variable dataset
+            epoch, fp16_scaler, dataset, args)   # se agrega la variable dataset
 
         # ============ writing logs ... ============
         save_dict = {
@@ -332,6 +332,7 @@ def calculate_class_proportions_in_batch(labels, dataset):
     labels_tensor = labels.clone().detach().cuda() # Usar directamente y mover a CUDA
     class_counts = torch.bincount(labels_tensor, minlength=len(dataset.classes))
     class_proportions = class_counts.float() / len(labels_tensor)
+    
     return class_proportions
 
 def calculate_class_proportions_in_dataset(dataset):
@@ -388,12 +389,12 @@ def compute_kl_loss_on_bagbatch(estimated_proportions, class_proportions, epsilo
 
 def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loader,
                     optimizer, lr_schedule, wd_schedule, momentum_schedule, epoch,
-                    fp16_scaler, dataset, prototypes_layer, args):  # se agrega la variable dataset
+                    fp16_scaler, dataset, args):  # se agrega la variable dataset
     metric_logger = utils.MetricLogger(delimiter="  ")
     header = 'Epoch: [{}/{}]'.format(epoch, args.epochs)
 
     # Crear una instancia de Prototypes fuera del bucle
-    # prototypes_layer = Prototypes(args.out_dim, args.nmb_prototypes).cuda()  
+    prototypes_layer = Prototypes(args.out_dim, args.nmb_prototypes).cuda()  
 
     # Calcular proporciones globales del dataset
     class_proportions_global = calculate_class_proportions_in_dataset(dataset)
@@ -418,52 +419,37 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
             student_output = student(images)
             loss1 = dino_loss(student_output, teacher_output, epoch)
 
-            # Paso a través de la capa de Prototipos
-            prototypes = prototypes_layer(student_output)
+        # Paso a través de la capa de Prototipos
+        prototypes = prototypes_layer(student_output)
             
-            # Normalizar los prototipos antes de Sinkhorn-Knopp
-            prototypes = nn.functional.normalize(prototypes, dim=1, p=2)
+        # Normalizar los prototipos antes de Sinkhorn-Knopp
+        prototypes = nn.functional.normalize(prototypes, dim=1, p=2)
 
-            # Establecer la tolerancia basada en el número de clusters K
-            K = args.nmb_prototypes
-            tolerance = (1 / K) * 0.1  
+        # Establecer la tolerancia basada en el número de clusters K
+        K = args.nmb_prototypes
+        tolerance = (1 / K) * 0.1  
             
-            # Aplicar distributed_sinkhorn para las proporciones y calcular la pérdida de KL
-            prototypes_output = sinkhorn_knopp(prototypes, temp=args.epsilon, n_iterations=args.n_iterations, wi=class_proportions, tolerance=tolerance)
-            # Impresión de las proporciones estimadas
-            # print("Prototipos después de Sinkhorn:", prototypes_output)
+        # Aplicar distributed_sinkhorn para las proporciones y calcular la pérdida de KL
+        prototypes_output = sinkhorn_knopp(prototypes, temp=args.epsilon, n_iterations=args.n_iterations, wi=class_proportions, tolerance=tolerance)
+        # Impresión de las proporciones estimadas
+        # print("Prototipos después de Sinkhorn:", prototypes_output)
 
-            # Calcular la pérdida KL
-            loss2 = compute_kl_loss_on_bagbatch(prototypes_output, class_proportions, epsilon=1e-8)
-            # Convertir prototypes_output a proporciones reales y calcular la pérdida KL
-            # prototypes_proportions = torch.sum(prototypes_output, dim=0) / torch.sum(prototypes_output)
-            # loss2 = compute_relax_ent(prototypes_proportions, class_proportions, epsilon=1e-8)
+        # Calcular la pérdida KL
+        loss2 = compute_kl_loss_on_bagbatch(prototypes_output, class_proportions, epsilon=1e-8)
+        # Convertir prototypes_output a proporciones reales y calcular la pérdida KL
+        # prototypes_proportions = torch.sum(prototypes_output, dim=0) / torch.sum(prototypes_output)
+        # loss2 = compute_relax_ent(prototypes_proportions, class_proportions, epsilon=1e-8)
             
-            # Combinar las pérdidas usando el parámetro alpha
-            # loss = args.alpha * loss1 + (1 - args.alpha) * loss2
+        # Combinar las pérdidas usando el parámetro alpha
+        # loss = args.alpha * loss1 + (1 - args.alpha) * loss2
 
-            # Incrementa el peso de la pérdida KL
-            loss = loss1 + args.alpha * loss2
+        # Incrementa el peso de la pérdida KL
+        loss = loss1 + args.alpha * loss2
 
         # Logging para monitorizar
         print(f"Batch {it} - Proporciones reales: {class_proportions}")
         print(f"Batch {it} - Proporciones estimadas: {torch.mean(prototypes_output, dim=0).cpu().numpy()}")
         # print(f"Batch {it} - Pérdida DINO: {loss1.item()}, Pérdida KL: {loss2.item()}, Pérdida Total: {loss.item()}")
-
-        # **Monitoreo de los prototipos**
-        if it % 50 == 0:  # Imprimir cada 50 iteraciones
-            with torch.no_grad():
-                print(f"Iteración {it} - Prototipos actuales (primeras 5 filas): {prototypes_layer.prototypes.weight[:5].cpu().numpy()}")
-                
-            # Monitorear gradientes de los prototipos
-            if prototypes_layer.prototypes.weight.grad is not None:
-                print(f"Gradientes de prototipos en iteración {it} (primeras 5 filas): {prototypes_layer.prototypes.weight.grad[:5].cpu().numpy()}")
-            else:
-                print(f"Gradientes de prototipos en iteración {it}: No se están actualizando los gradientes.")
-
-        if not math.isfinite(loss.item()):
-            print("Loss is {}, stopping training".format(loss.item()), force=True)
-            sys.exit(1)
 
         # imprimir información de las salidas (solo una vez)
         if it == 0 and utils.is_main_process():
@@ -497,6 +483,23 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
             m = momentum_schedule[it]  # momentum parameter
             for param_q, param_k in zip(student.module.parameters(), teacher_without_ddp.parameters()):
                 param_k.data.mul_(m).add_((1 - m) * param_q.detach().data)
+
+        '''
+        # **Monitoreo de los prototipos**
+        if it % 50 == 0:  # Imprimir cada 50 iteraciones
+            with torch.no_grad():
+                print(f"Iteración {it} - Prototipos actuales (primeras 5 filas): {prototypes_layer.prototypes.weight[:5].cpu().numpy()}")
+                
+            # Monitorear gradientes de los prototipos
+            if prototypes_layer.prototypes.weight.grad is not None:
+                print(f"Gradientes de prototipos en iteración {it} (primeras 5 filas): {prototypes_layer.prototypes.weight.grad[:5].cpu().numpy()}")
+            else:
+                print(f"Gradientes de prototipos en iteración {it}: No se están actualizando los gradientes.")
+        '''
+
+        if not math.isfinite(loss.item()):
+            print("Loss is {}, stopping training".format(loss.item()), force=True)
+            sys.exit(1)
 
         # logging
         torch.cuda.synchronize()
