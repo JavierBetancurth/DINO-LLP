@@ -432,7 +432,7 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
             # Aplicar distributed_sinkhorn para las proporciones y calcular la pérdida de KL
             prototypes_output = sinkhorn_knopp(prototypes, temp=args.epsilon, n_iterations=args.n_iterations)
 
-            # class_proportions_global = class_proportions_global.unsqueeze(0)  # Cambiar a (1, 10)
+            class_proportions_global = class_proportions_global.unsqueeze(0)  # Cambiar a (1, 10)
             class_proportions_global = class_proportions_global.repeat(640, 1)  # Cambiar a (640, 10)
             
             # Convertir prototypes_output a proporciones reales y calcular la pérdida KL
