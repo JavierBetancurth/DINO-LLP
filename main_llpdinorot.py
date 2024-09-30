@@ -41,6 +41,7 @@ from vision_transformer import DINOHead
 from proportions_assignments.prototypes_layer import Prototypes
 from loss.koleo_loss import KoLeoLoss
 from loss.koleo_loss_proportions import KoLeoLossProportions
+from loss.llp_loss import ProportionLoss
 
 torchvision_archs = sorted(name for name in torchvision_models.__dict__
     if name.islower() and not name.startswith("__")
@@ -247,8 +248,10 @@ def train_dino(args):
         args.epochs,
     ).cuda()
 
-    # En el ciclo de entrenamiento del modelo DINO
+    # koleo loss
     koLeo_loss_fn = KoLeoLoss()
+    # proportion loss
+    proportion_loss_fn = ProportionLoss()
     
     # ============ preparing optimizer ... ============
     params_groups = utils.get_params_groups(student)
@@ -305,7 +308,7 @@ def train_dino(args):
         # ============ training one epoch of DINO ... ============
         train_stats = train_one_epoch(student, teacher, teacher_without_ddp, dino_loss,
             data_loader, optimizer, lr_schedule, wd_schedule, momentum_schedule,
-            epoch, fp16_scaler, dataset, prototypes_layer, koLeo_loss_fn, args)   # se agrega la variable dataset, prototypes_layer y koLeo_loss_fn
+            epoch, fp16_scaler, dataset, prototypes_layer, koLeo_loss_fn, proportion_loss_fn, args)   # se agrega la variable dataset, prototypes_layer, proportion_loss_fn y koLeo_loss_fn
 
         # ============ writing logs ... ============
         save_dict = {
@@ -393,7 +396,7 @@ def compute_kl_loss_on_bagbatch(estimated_proportions, class_proportions, epsilo
 
 def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loader,
                     optimizer, lr_schedule, wd_schedule, momentum_schedule, epoch,
-                    fp16_scaler, dataset, prototypes_layer, koLeo_loss_fn, args):  # se agrega la variable dataset, prototypes_layer y koLeo_loss_fn
+                    fp16_scaler, dataset, prototypes_layer, koLeo_loss_fn, proportion_loss_fn, args):  # se agrega la variable dataset, prototypes_layer, proportion_loss_fn y koLeo_loss_fn
     metric_logger = utils.MetricLogger(delimiter="  ")
     header = 'Epoch: [{}/{}]'.format(epoch, args.epochs)
 
@@ -428,27 +431,22 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
                 
             # Normalizar los prototipos antes de Sinkhorn-Knopp
             prototypes = nn.functional.normalize(prototypes, dim=1, p=2)
-    
-            # Establecer la tolerancia basada en el número de clusters K
-            K = args.nmb_prototypes
-            tolerance = (1 / K) * 0.1  
                 
             # Aplicar distributed_sinkhorn para las proporciones y calcular la pérdida de KL
-            prototypes_output = sinkhorn_knopp(prototypes, temp=args.epsilon, n_iterations=args.n_iterations, wi=class_proportions, tolerance=tolerance)
+            prototypes_output = sinkhorn_knopp(prototypes, temp=args.epsilon, n_iterations=args.n_iterations)
             # Impresión de las proporciones estimadas
             # print("Prototipos después de Sinkhorn:", prototypes_output)
     
             # Calcular la pérdida KL
-            loss2 = compute_kl_loss_on_bagbatch(prototypes_output, class_proportions_global, epsilon=1e-8)
+            # loss2 = compute_kl_loss_on_bagbatch(prototypes_output, class_proportions_global, epsilon=1e-8)
             # Convertir prototypes_output a proporciones reales y calcular la pérdida KL
-            # prototypes_proportions = torch.sum(prototypes_output, dim=0) / torch.sum(prototypes_output)
-            # loss2 = compute_relax_ent(prototypes_proportions, class_proportions, epsilon=1e-8)
-                
-            # Combinar las pérdidas usando el parámetro alpha
-            # loss = args.alpha * loss1 + (1 - args.alpha) * loss2
+            loss2 = proportion_loss_fn(prototypes_proportions, class_proportions)
 
             # Calcula la pérdida KoLeo
             loss3 = koLeo_loss_fn(student_output)
+
+            # Combinar las pérdidas usando el parámetro alpha
+            # loss = args.alpha * loss1 + (1 - args.alpha) * loss2
     
             # Incrementa el peso de la pérdida KL
             loss = loss1 + args.alpha * loss2 +  loss3
@@ -602,7 +600,7 @@ class DINOLoss(nn.Module):
         self.center = self.center * self.center_momentum + batch_center * (1 - self.center_momentum)
 
 @torch.no_grad()
-def sinkhorn_knopp(prototypes, temp, n_iterations, wi, tolerance):
+def sinkhorn_knopp(prototypes, temp, n_iterations):
         prototypes = prototypes.float()
         # print(prototypes.shape)
         world_size = dist.get_world_size() if dist.is_initialized() else 1
@@ -629,15 +627,6 @@ def sinkhorn_knopp(prototypes, temp, n_iterations, wi, tolerance):
             # Normalize each column: total weight per sample must be 1/B
             Q /= torch.sum(Q, dim=0, keepdim=True)
             Q /= B
-
-            # Comprobar el error entre los marginales y las proporciones conocidas
-            r_estimated = torch.sum(Q, dim=1)  # Marginal estimated for prototypes
-            error = torch.abs(r_estimated - wi).mean()  # Calcular el error medio
-    
-            # Si el error es menor que la tolerancia detener las iteraciones
-            if error < tolerance:
-                print(f"Stopping Sinkhorn at iteration {it} with error {error}")
-                break
 
         Q *= B  # the columns must sum to 1 so that Q is an assignment
         return Q.t()   
