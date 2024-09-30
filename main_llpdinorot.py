@@ -461,6 +461,15 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
             print("student output shape:", student_output.shape)
             print("student output type:", student_output.dtype)
 
+            print("Teacher output shape:", teacher_output.shape)
+            print("Student output shape:", student_output.shape)
+            print("Prototypes output shape:", prototypes_output.shape)
+            print("Class proportions shape:", class_proportions_global.shape)
+            print("Loss1:", loss1.item())
+            print("Loss2:", loss2.item())
+            print("Loss3:", loss3.item())
+
+
         # student update
         optimizer.zero_grad()
         param_norms = None
