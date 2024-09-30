@@ -434,12 +434,15 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
             # Impresión de las proporciones estimadas
             # print("Prototipos después de Sinkhorn:", prototypes_output)
 
-            model = SimpleClassifier(student_network=student, out_dim=65536, nmb_prototypes=10)
+            model = SimpleClassifier(student_network=student, nmb_prototypes=10)
+
+            # Producir la salida del modelo (prototipos)
+            prototypes_output = model(student_output) 
     
             # Convertir prototypes_output a proporciones reales y calcular la pérdida KL
             # loss2 = compute_kl_loss_on_bagbatch(prototypes_output, class_proportions_global, epsilon=1e-8)
             # Calcula las pérdidas
-            loss2 = proportion_loss_fn(model, class_proportions_global)
+            loss2 = proportion_loss_fn(prototypes_output, class_proportions_global)
 
             # Calcula la pérdida KoLeo
             loss3 = koLeo_loss_fn(student_output)
