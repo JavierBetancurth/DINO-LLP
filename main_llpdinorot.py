@@ -631,9 +631,6 @@ def sinkhorn_knopp(prototypes, temp, n_iterations):
         Q *= B  # the columns must sum to 1 so that Q is an assignment
         return Q.t()   
 
-
-prototypes_layer = Prototypes(output_dim=args.out_dim, nmb_prototypes=args.nmb_prototypes).cuda()
-
 class SimpleClassifier(nn.Module):
     def __init__(self):
         super(SimpleClassifier, self).__init__()
