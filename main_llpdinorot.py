@@ -443,8 +443,8 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
             # Combinar las pérdidas usando el parámetro alpha
             # loss = args.alpha * loss1 + (1 - args.alpha) * loss2
     
-        # Incrementa el peso de la pérdida KL
-        loss = loss1 + args.alpha * loss2
+            # Incrementa el peso de la pérdida KL
+            loss = loss1 + args.alpha * loss2
 
         # Logging para monitorizar
         print(f"Batch {it} - Proporciones reales: {class_proportions}")
