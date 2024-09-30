@@ -437,10 +437,11 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
             # Impresión de las proporciones estimadas
             # print("Prototipos después de Sinkhorn:", prototypes_output)
     
-            # Calcular la pérdida KL
-            # loss2 = compute_kl_loss_on_bagbatch(prototypes_output, class_proportions_global, epsilon=1e-8)
             # Convertir prototypes_output a proporciones reales y calcular la pérdida KL
-            loss2 = proportion_loss_fn(prototypes_proportions, class_proportions)
+            # loss2 = compute_kl_loss_on_bagbatch(prototypes_output, class_proportions_global, epsilon=1e-8)
+            # Calcula las pérdidas
+            proportion_loss_fn = ProportionLoss(metric="ce", alpha=alpha)  # Cambia a "l1" o "mse" si es necesario
+            loss2 = proportion_loss_fn(student_output, class_proportions)
 
             # Calcula la pérdida KoLeo
             loss3 = koLeo_loss_fn(student_output)
@@ -630,47 +631,20 @@ def sinkhorn_knopp(prototypes, temp, n_iterations):
 
         Q *= B  # the columns must sum to 1 so that Q is an assignment
         return Q.t()   
-'''
-def compute_relax_ent(F, z, alpha=0.5, epsilon=1e-8, niter=100):
-    # Convertir z a un tensor de PyTorch si es un ndarray
-    if isinstance(z, np.ndarray):
-        z = torch.tensor(z, dtype=torch.float32)
-    
-    if z.dim() == 1:
-        z = z.unsqueeze(0)  # Asegúrate de que z sea [1, K]
 
-    n, K = F.shape  # Aquí F es de [640, 10]
-    
-    # Expande z para que sea de tamaño [n, K] usando broadcasting
-    z = z.expand(n, -1)  # Expande z a [640, 10]
 
-    tau = (1 + alpha * epsilon / (1 - alpha)) ** -1
-    b = torch.ones(K, device=F.device) / n  # Inicializamos b con tamaño [10]
+class SimpleClassifier(nn.Module):
+    def __init__(self):
+        super(SimpleClassifier, self).__init__()
+        # Suponiendo que la red principal ya está definida y produce una salida de 65536 características
+        self.fc = nn.Linear(65536, 10)  # Capa de clasificación para 10 clases
 
-    for _ in range(niter):
-        # Calcula F_b como [640, 10]
-        F_b = F @ b  # F @ b será [640, 10]
+    def forward(self, x):
+        # x es la entrada de la red que produce una salida de 65536 características
+        x = self.backbone(x)  # Llamar a la red principal (definida previamente)
+        x = self.fc(x)  # Aplicar la capa de clasificación
+        return F.softmax(x, dim=-1)  # Retornar las probabilidades
 
-        # Cambia la operación de división para asegurar la compatibilidad de dimensiones
-        a = (n * z / (F_b + epsilon)) ** tau  # z expandido a [640, 10]
-        a = torch.clamp(a, min=epsilon)  # Evita valores extremadamente pequeños en `a`
-
-        # Actualiza b con dimensiones [10]
-        b = (1 / n) * (F.t() @ a.sum(dim=0))  # Calcula `a.sum(dim=0)` para que la dimensión sea [10]
-        
-        # Calcula U
-        U = torch.diag(a.sum(dim=0)) @ F @ torch.diag(b)  # Cálculo de U
-    
-    # Calcular la entropía de U
-    H_U = -torch.sum(U * torch.log(U + epsilon))
-    
-    # Calcular la divergencia KL
-    kl_divergence = torch.sum(a.sum(dim=0) * (torch.log(a.sum(dim=0) + epsilon) - torch.log(b + epsilon)))
-
-    # Pérdida final
-    loss = alpha * H_U + (1 - alpha) * kl_divergence
-    return loss
-'''
 class DataAugmentationDINO(object):
     def __init__(self, global_crops_scale, local_crops_scale, local_crops_number):
         flip_and_color_jitter = transforms.Compose([
