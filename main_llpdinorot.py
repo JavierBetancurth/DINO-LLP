@@ -39,7 +39,8 @@ from vision_transformer import DINOHead
 # proportions
 # from loss.kl_loss import compute_kl_loss_on_bagbatch
 from proportions_assignments.prototypes_layer import Prototypes
-
+from loss.koleo_loss import Koleo_loss
+from loss.koleo_loss_proportions import Koleo_loss_proportions
 
 torchvision_archs = sorted(name for name in torchvision_models.__dict__
     if name.islower() and not name.startswith("__")
@@ -246,6 +247,9 @@ def train_dino(args):
         args.epochs,
     ).cuda()
 
+    # En el ciclo de entrenamiento del modelo DINO
+    koLeo_loss_fn = KoLeoLoss()
+    
     # ============ preparing optimizer ... ============
     params_groups = utils.get_params_groups(student)
     
@@ -442,9 +446,12 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
                 
             # Combinar las pérdidas usando el parámetro alpha
             # loss = args.alpha * loss1 + (1 - args.alpha) * loss2
+
+            # Calcula la pérdida KoLeo
+            loss3 = koLeo_loss_fn(student_output)
     
             # Incrementa el peso de la pérdida KL
-            loss = loss1 + args.alpha * loss2
+            loss = loss1 + args.alpha * loss2 +  loss3
 
         # Logging para monitorizar
         # print(f"Batch {it} - Proporciones reales: {class_proportions}")
@@ -506,6 +513,7 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
         metric_logger.update(loss=loss.item())
         metric_logger.update(loss_dino=loss1.item())
         metric_logger.update(loss_kl=loss2.item())
+        metric_logger.update(loss_koleo=loss3.item())
         metric_logger.update(lr=optimizer.param_groups[0]["lr"])
         metric_logger.update(wd=optimizer.param_groups[0]["weight_decay"])
         # metric_logger.update(alpha=alpha)
