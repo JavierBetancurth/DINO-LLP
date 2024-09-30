@@ -236,7 +236,7 @@ def train_dino(args):
     print(f"Student and Teacher are built: they are both {args.arch} network.")
 
     # ============ building prototype layer ... ============
-    prototypes_layer = Prototypes(output_dim=args.out_dim, nmb_prototypes=args.nmb_prototypes).cuda()
+    prototypes_layer = Prototypes(output_dim=args.out_dim, =args.).cuda()
 
     # ============ preparing loss ... ============
     dino_loss = DINOLoss(
@@ -401,7 +401,7 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
     header = 'Epoch: [{}/{}]'.format(epoch, args.epochs)
 
     # Crear una instancia de Prototypes fuera del bucle
-    prototypes_layer = Prototypes(args.out_dim, args.nmb_prototypes).cuda()  
+    prototypes_layer = Prototypes(args.out_dim, args.).cuda()  
 
     # Calcular proporciones globales del dataset
     class_proportions_global = calculate_class_proportions_in_dataset(dataset)
@@ -440,7 +440,7 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
             # Convertir prototypes_output a proporciones reales y calcular la pérdida KL
             # loss2 = compute_kl_loss_on_bagbatch(prototypes_output, class_proportions_global, epsilon=1e-8)
             # Calcula las pérdidas
-            loss2 = ProportionLoss(student_output, class_proportions, metric="ce", alpha=alpha)  # Cambia a "l1" o "mse" si es necesario
+            loss2 = ProportionLoss(student_output, class_proportions, metric="ce", alpha=args.alpha)  # Cambia a "l1" o "mse" si es necesario
 
             # Calcula la pérdida KoLeo
             loss3 = koLeo_loss_fn(student_output)
@@ -632,11 +632,13 @@ def sinkhorn_knopp(prototypes, temp, n_iterations):
         return Q.t()   
 
 
+prototypes_layer = Prototypes(output_dim=args.out_dim, nmb_prototypes=args.nmb_prototypes).cuda()
+
 class SimpleClassifier(nn.Module):
     def __init__(self):
         super(SimpleClassifier, self).__init__()
         # Suponiendo que la red principal ya está definida y produce una salida de 65536 características
-        self.fc = nn.Linear(65536, 10)  # Capa de clasificación para 10 clases
+        self.fc = nn.Linear(output_dim=args.out_dim, nmb_prototypes=args.nmb_prototypes)  # Capa de clasificación para n numero de prototipos 
 
     def forward(self, x):
         # x es la entrada de la red que produce una salida de 65536 características
