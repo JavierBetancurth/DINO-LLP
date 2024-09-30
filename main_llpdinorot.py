@@ -431,13 +431,6 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
                 
             # Aplicar distributed_sinkhorn para las proporciones y calcular la pérdida de KL
             prototypes_output = sinkhorn_knopp(prototypes, temp=args.epsilon, n_iterations=args.n_iterations)
-            # Impresión de las proporciones estimadas
-            # print("Prototipos después de Sinkhorn:", prototypes_output)
-
-            model = SimpleClassifier(student_network=student, nmb_prototypes=10)
-
-            # Producir la salida del modelo (prototipos)
-            prototypes_output = model(student_output) 
     
             # Convertir prototypes_output a proporciones reales y calcular la pérdida KL
             # loss2 = compute_kl_loss_on_bagbatch(prototypes_output, class_proportions_global, epsilon=1e-8)
@@ -633,6 +626,7 @@ def sinkhorn_knopp(prototypes, temp, n_iterations):
         Q *= B  # the columns must sum to 1 so that Q is an assignment
         return Q.t()   
 
+'''
 class SimpleClassifier(nn.Module):
     def __init__(self, student_network, nmb_prototypes):
         """
@@ -655,6 +649,7 @@ class SimpleClassifier(nn.Module):
         x = self.student(x)  # Pasar la entrada a través de la red estudiante
         x = self.fc(x)  # Aplicar la capa de clasificación
         return F.softmax(x, dim=-1)  # Retornar las probabilidades
+'''
 
 class DataAugmentationDINO(object):
     def __init__(self, global_crops_scale, local_crops_scale, local_crops_number):
