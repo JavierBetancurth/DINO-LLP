@@ -41,7 +41,7 @@ class ProportionLoss(nn.Module):
     def forward(self, input, target):
         # input and target shoud ba a probability tensor
         # and have been averaged over bag size
-        assert simplex.check(input).all() and simplex.check(target), \  # Se modifica agregando .all() para verificacion de todas las salidas del estudiante
+        assert simplex.check(input).all() and simplex.check(target), \ 
             "input {} and target {} should be a simplex".format(input, target)
         assert input.shape == target.shape
 
