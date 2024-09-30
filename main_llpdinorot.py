@@ -400,9 +400,6 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
     metric_logger = utils.MetricLogger(delimiter="  ")
     header = 'Epoch: [{}/{}]'.format(epoch, args.epochs)
 
-    # Crear una instancia de Prototypes fuera del bucle
-    prototypes_layer = Prototypes(args.out_dim, args.).cuda()  
-
     # Calcular proporciones globales del dataset
     class_proportions_global = calculate_class_proportions_in_dataset(dataset)
                         
