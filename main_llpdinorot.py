@@ -236,7 +236,7 @@ def train_dino(args):
     print(f"Student and Teacher are built: they are both {args.arch} network.")
 
     # ============ building prototype layer ... ============
-    prototypes_layer = Prototypes(output_dim=args.out_dim, =args.).cuda()
+    prototypes_layer = Prototypes(output_dim=args.out_dim, nmb_prototypes=args.nmb_prototypes).cuda()
 
     # ============ preparing loss ... ============
     dino_loss = DINOLoss(
@@ -634,7 +634,7 @@ def sinkhorn_knopp(prototypes, temp, n_iterations):
 class SimpleClassifier(nn.Module):
     def __init__(self):
         super(SimpleClassifier, self).__init__()
-        # Suponiendo que la red principal ya está definida y produce una salida de 65536 características
+        # La red principal ya está definida y produce una salida de 65536 características
         self.fc = nn.Linear(output_dim=args.out_dim, nmb_prototypes=args.nmb_prototypes)  # Capa de clasificación para n numero de prototipos 
 
     def forward(self, x):
