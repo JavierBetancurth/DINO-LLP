@@ -419,30 +419,30 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
             student_output = student(images)
             loss1 = dino_loss(student_output, teacher_output, epoch)
 
-        # Paso a través de la capa de Prototipos
-        prototypes = prototypes_layer(student_output)
-            
-        # Normalizar los prototipos antes de Sinkhorn-Knopp
-        prototypes = nn.functional.normalize(prototypes, dim=1, p=2)
-
-        # Establecer la tolerancia basada en el número de clusters K
-        K = args.nmb_prototypes
-        tolerance = (1 / K) * 0.1  
-            
-        # Aplicar distributed_sinkhorn para las proporciones y calcular la pérdida de KL
-        prototypes_output = sinkhorn_knopp(prototypes, temp=args.epsilon, n_iterations=args.n_iterations, wi=class_proportions, tolerance=tolerance)
-        # Impresión de las proporciones estimadas
-        # print("Prototipos después de Sinkhorn:", prototypes_output)
-
-        # Calcular la pérdida KL
-        loss2 = compute_kl_loss_on_bagbatch(prototypes_output, class_proportions, epsilon=1e-8)
-        # Convertir prototypes_output a proporciones reales y calcular la pérdida KL
-        # prototypes_proportions = torch.sum(prototypes_output, dim=0) / torch.sum(prototypes_output)
-        # loss2 = compute_relax_ent(prototypes_proportions, class_proportions, epsilon=1e-8)
-            
-        # Combinar las pérdidas usando el parámetro alpha
-        # loss = args.alpha * loss1 + (1 - args.alpha) * loss2
-
+            # Paso a través de la capa de Prototipos
+            prototypes = prototypes_layer(student_output)
+                
+            # Normalizar los prototipos antes de Sinkhorn-Knopp
+            prototypes = nn.functional.normalize(prototypes, dim=1, p=2)
+    
+            # Establecer la tolerancia basada en el número de clusters K
+            K = args.nmb_prototypes
+            tolerance = (1 / K) * 0.1  
+                
+            # Aplicar distributed_sinkhorn para las proporciones y calcular la pérdida de KL
+            prototypes_output = sinkhorn_knopp(prototypes, temp=args.epsilon, n_iterations=args.n_iterations, wi=class_proportions, tolerance=tolerance)
+            # Impresión de las proporciones estimadas
+            # print("Prototipos después de Sinkhorn:", prototypes_output)
+    
+            # Calcular la pérdida KL
+            loss2 = compute_kl_loss_on_bagbatch(prototypes_output, class_proportions, epsilon=1e-8)
+            # Convertir prototypes_output a proporciones reales y calcular la pérdida KL
+            # prototypes_proportions = torch.sum(prototypes_output, dim=0) / torch.sum(prototypes_output)
+            # loss2 = compute_relax_ent(prototypes_proportions, class_proportions, epsilon=1e-8)
+                
+            # Combinar las pérdidas usando el parámetro alpha
+            # loss = args.alpha * loss1 + (1 - args.alpha) * loss2
+    
         # Incrementa el peso de la pérdida KL
         loss = loss1 + args.alpha * loss2
 
