@@ -434,7 +434,7 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
 
             print("Class proportions global shape before unsqueeze:", class_proportions_global.shape)
 
-            class_proportions_global = class_proportions_global.unsqueeze(0).repeat(prototypes_output.shape[0], 1)  # Cambiar a (N, 10)
+            # class_proportions_global = class_proportions_global.unsqueeze(0).repeat(prototypes_output.shape[0], 1)  # Cambiar a (N, 10)
             
             # Convertir prototypes_output a proporciones reales y calcular la pérdida KL
             # loss2 = compute_kl_loss_on_bagbatch(prototypes_output, class_proportions_global, epsilon=1e-8)
