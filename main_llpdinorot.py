@@ -251,7 +251,7 @@ def train_dino(args):
     # koleo loss
     koLeo_loss_fn = KoLeoLoss()
     # proportion loss
-    proportion_loss_fn = ProportionLoss()
+    proportion_loss_fn = ProportionLoss(metric=metric, alpha=alpha)
     
     # ============ preparing optimizer ... ============
     params_groups = utils.get_params_groups(student)
