@@ -437,7 +437,7 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
             # Convertir prototypes_output a proporciones reales y calcular la pérdida KL
             # loss2 = compute_kl_loss_on_bagbatch(prototypes_output, class_proportions_global, epsilon=1e-8)
             # Calcula las pérdidas
-            loss2 = ProportionLoss(student_output, class_proportions)
+            loss2 = proportion_loss_fn(student_output, class_proportions)
 
             # Calcula la pérdida KoLeo
             loss3 = koLeo_loss_fn(student_output)
