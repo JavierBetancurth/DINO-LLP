@@ -24,7 +24,7 @@ def compute_hard_l1(inputs, targets, num_classes):
 
 
 def cross_entropy_loss(input, target, eps=1e-8):
-    assert simplex.check(input).all() and simplex.check(target), "input {} and target {} should be a simplex".format(input, target)
+    assert simplex.check(input).all() and simplex.check(target).all(), "input {} and target {} should be a simplex".format(input, target)
     input = torch.clamp(input, eps, 1 - eps)
     loss = -target * torch.log(input)
     return loss
@@ -40,7 +40,7 @@ class ProportionLoss(nn.Module):
     def forward(self, input, target):
         # input and target shoud ba a probability tensor
         # and have been averaged over bag size
-        assert simplex.check(input).all() and simplex.check(target), "input {} and target {} should be a simplex".format(input, target)
+        assert simplex.check(input).all() and simplex.check(target).all(), "input {} and target {} should be a simplex".format(input, target)
         assert input.shape == target.shape
 
         if self.metric == "ce":
