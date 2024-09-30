@@ -403,7 +403,7 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
     # Calcular proporciones globales del dataset
     class_proportions_global = calculate_class_proportions_in_dataset(dataset)
     print("Class proportions global shape before unsqueeze:", class_proportions_global.shape)
-    class_proportions_global = class_proportions_global.unsqueeze(0).repeat(prototypes_output.shape[0], 1)  # Cambiar a (N, 10)
+    class_proportions_global = class_proportions_global.unsqueeze(0).repeat(640, 1)  # Cambiar a (N, 10)
                         
     for it, (images, labels) in enumerate(metric_logger.log_every(data_loader, 10, header)):
         
