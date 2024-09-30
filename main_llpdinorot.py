@@ -39,8 +39,8 @@ from vision_transformer import DINOHead
 # proportions
 # from loss.kl_loss import compute_kl_loss_on_bagbatch
 from proportions_assignments.prototypes_layer import Prototypes
-from loss.koleo_loss import Koleo_loss
-from loss.koleo_loss_proportions import Koleo_loss_proportions
+from loss.koleo_loss import KoLeoLoss
+from loss.koleo_loss_proportions import KoLeoLoss_proportions
 
 torchvision_archs = sorted(name for name in torchvision_models.__dict__
     if name.islower() and not name.startswith("__")
