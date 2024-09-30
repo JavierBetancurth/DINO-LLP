@@ -437,7 +437,7 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
             # Convertir prototypes_output a proporciones reales y calcular la pérdida KL
             # loss2 = compute_kl_loss_on_bagbatch(prototypes_output, class_proportions_global, epsilon=1e-8)
             # Calcula las pérdidas
-            loss2 = proportion_loss_fn(student_output, class_proportions)
+            loss2 = proportion_loss_fn(student_output, class_proportions_global)
 
             # Calcula la pérdida KoLeo
             loss3 = koLeo_loss_fn(student_output)
@@ -629,14 +629,25 @@ def sinkhorn_knopp(prototypes, temp, n_iterations):
         return Q.t()   
 
 class SimpleClassifier(nn.Module):
-    def __init__(self):
+    def __init__(self, student_network, nmb_prototypes):
+        """
+        Args:
+        - student_network (nn.Module): La red estudiante que extrae las características.
+        - nmb_prototypes (int): Número de prototipos/clases para la clasificación.
+        """
         super(SimpleClassifier, self).__init__()
-        # La red principal ya está definida y produce una salida de 65536 características
-        self.fc = nn.Linear(output_dim=args.out_dim, nmb_prototypes=args.nmb_prototypes)  # Capa de clasificación para n numero de prototipos 
+        self.student = student_network  # Red estudiante
+        self.fc = nn.Linear(65536, nmb_prototypes)  # Capa de clasificación para 65536 características
 
     def forward(self, x):
-        # x es la entrada de la red que produce una salida de 65536 características
-        x = self.backbone(x)  # Llamar a la red principal (definida previamente)
+        """
+        Args:
+        - x (Tensor): Entrada a la red.
+        
+        Returns:
+        - Tensor: Probabilidades de cada clase.
+        """
+        x = self.student(x)  # Pasar la entrada a través de la red estudiante
         x = self.fc(x)  # Aplicar la capa de clasificación
         return F.softmax(x, dim=-1)  # Retornar las probabilidades
 
