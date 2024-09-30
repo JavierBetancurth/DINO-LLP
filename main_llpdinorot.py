@@ -435,7 +435,7 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
             # print("Prototipos después de Sinkhorn:", prototypes_output)
     
             # Calcular la pérdida KL
-            loss2 = compute_kl_loss_on_bagbatch(prototypes_output, class_proportions, epsilon=1e-8)
+            loss2 = compute_kl_loss_on_bagbatch(prototypes_output, class_proportions_global, epsilon=1e-8)
             # Convertir prototypes_output a proporciones reales y calcular la pérdida KL
             # prototypes_proportions = torch.sum(prototypes_output, dim=0) / torch.sum(prototypes_output)
             # loss2 = compute_relax_ent(prototypes_proportions, class_proportions, epsilon=1e-8)
