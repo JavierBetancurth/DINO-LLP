@@ -233,6 +233,9 @@ def train_dino(args):
         p.requires_grad = False
     print(f"Student and Teacher are built: they are both {args.arch} network.")
 
+    # ============ building prototype layer ... ============
+    prototypes_layer = Prototypes(output_dim=args.out_dim, nmb_prototypes=args.nmb_prototypes).cuda()
+
     # ============ preparing loss ... ============
     dino_loss = DINOLoss(
         args.out_dim,
@@ -242,9 +245,6 @@ def train_dino(args):
         args.warmup_teacher_temp_epochs,
         args.epochs,
     ).cuda()
-
-    # Crear la capa de prototipos ANTES de configurar el optimizador
-    # prototypes_layer = Prototypes(output_dim=args.out_dim, nmb_prototypes=args.nmb_prototypes).cuda()
 
     # ============ preparing optimizer ... ============
     params_groups = utils.get_params_groups(student)
@@ -301,7 +301,7 @@ def train_dino(args):
         # ============ training one epoch of DINO ... ============
         train_stats = train_one_epoch(student, teacher, teacher_without_ddp, dino_loss,
             data_loader, optimizer, lr_schedule, wd_schedule, momentum_schedule,
-            epoch, fp16_scaler, dataset, args)   # se agrega la variable dataset
+            epoch, fp16_scaler, dataset, prototypes_layer, args)   # se agrega la variable dataset y prototypes_layer
 
         # ============ writing logs ... ============
         save_dict = {
@@ -389,7 +389,7 @@ def compute_kl_loss_on_bagbatch(estimated_proportions, class_proportions, epsilo
 
 def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loader,
                     optimizer, lr_schedule, wd_schedule, momentum_schedule, epoch,
-                    fp16_scaler, dataset, args):  # se agrega la variable dataset
+                    fp16_scaler, dataset, prototypes_layer, args):  # se agrega la variable dataset y prototypes_layer
     metric_logger = utils.MetricLogger(delimiter="  ")
     header = 'Epoch: [{}/{}]'.format(epoch, args.epochs)
 
