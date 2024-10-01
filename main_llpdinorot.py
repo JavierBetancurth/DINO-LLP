@@ -677,8 +677,9 @@ def sinkhorn_knopp(prototypes, temp, n_iterations):
             Q /= B
 
         Q *= B  # the columns must sum to 1 so that Q is an assignment
-        return Q.t()   
-
+        return Q.t()  
+    
+'''
 class MemoryBank:
     def __init__(self, size, dim, num_crops=10):
         self.size = size * num_crops # Tamaño total del dataset
@@ -691,6 +692,26 @@ class MemoryBank:
         embeddings = embeddings.to(torch.float16)
         self.embeddings[indices] = embeddings
         self.assignments[indices] = assignments
+'''
+
+class MemoryBank:
+    def __init__(self, size, dim, num_crops=10, fragment_size=10000):
+        self.size = size * num_crops  # Tamaño total del dataset considerando los recortes
+        self.dim = dim  # Dimensionalidad de las embeddings
+        self.fragment_size = fragment_size
+        self.embeddings = torch.zeros(self.size, dim, dtype=torch.float16).cpu()  # Usar float16
+        self.assignments = -torch.ones(self.size).long().cpu()
+
+    def update_memory(self, indices, embeddings, assignments):
+        # Divide las actualizaciones en fragmentos para evitar desbordar la memoria
+        for i in range(0, len(indices), self.fragment_size):
+            frag_indices = indices[i:i + self.fragment_size]
+            frag_embeddings = embeddings[i:i + self.fragment_size].to(torch.float16)
+            frag_assignments = assignments[i:i + self.fragment_size]
+
+            self.embeddings[frag_indices] = frag_embeddings
+            self.assignments[frag_indices] = frag_assignments
+
 
 class DataAugmentationDINO(object):
     def __init__(self, global_crops_scale, local_crops_scale, local_crops_number):
