@@ -258,7 +258,7 @@ def train_dino(args):
     dim_embeddings = args.out_dim  # Dimensión de las embeddings, basada en el modelo
 
     # Inicializar el banco de memoria con el tamaño y la dimensión correctos
-    memory_bank = MemoryBank(size=size_dataset, dim=dim_embeddings)
+    memory_bank = MemoryBank(size=size_dataset, dim=dim_embeddings).cpu()
     
     # ============ preparing optimizer ... ============
     params_groups = utils.get_params_groups(student)
