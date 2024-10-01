@@ -449,8 +449,13 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
             start_index = it * 640  # Calcula el índice de inicio para el lote actual
             indices = torch.arange(start_index, start_index + 640).cuda()  # Genera los índices para el banco de memoria
 
-            # Actualizar el banco de memoria
-            memory_bank.update_memory(indices, student_output.detach().float(), prototypes_output.argmax(dim=1).long())
+            # Mueve los tensores a la CPU antes de actualizar el banco de memoria
+            indices_cpu = indices.cpu()  # Mueve indices a la CPU
+            embeddings_cpu = student_output.detach().float().cpu()  # Mueve embeddings a la CPU
+            prototypes_cpu = prototypes_output.argmax(dim=1).long().cpu()  # Mueve las asignaciones a la CPU
+
+            # Actualiza el banco de memoria en la CPU
+            memory_bank.update_memory(indices_cpu, embeddings_cpu, prototypes_cpu)
             
             # Asignar cada recorte a una clase (máxima probabilidad)
             # recorte_asignaciones = torch.argmax(prototypes_output, dim=1) # (640,)
