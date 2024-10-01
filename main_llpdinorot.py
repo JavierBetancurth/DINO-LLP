@@ -445,6 +445,10 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
             # Asignar recortes a prototipos con Sinkhorn-Knopp
             prototypes_output = sinkhorn_knopp(prototypes, temp=args.epsilon, n_iterations=args.n_iterations)
 
+            # Calculate the indices for the current batch
+            start_index = it * 640  # Calcula el índice de inicio para el lote actual
+            indices = torch.arange(start_index, start_index + 640).cuda()  # Genera los índices para el banco de memoria
+
             # Actualizar el banco de memoria
             memory_bank.update_memory(indices, student_output.detach(), prototypes_output.argmax(dim=1))
             
