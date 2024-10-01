@@ -467,6 +467,9 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
 
             # Actualiza el banco de memoria en la CPU
             memory_bank.update_memory(indices_cpu, embeddings_cpu, prototypes_cpu)
+
+            # Sincronizar con el disco
+            memory_bank.sync()
             
             # Asignar cada recorte a una clase (máxima probabilidad)
             # recorte_asignaciones = torch.argmax(prototypes_output, dim=1) # (640,)
