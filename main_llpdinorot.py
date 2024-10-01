@@ -252,6 +252,7 @@ def train_dino(args):
     koLeo_loss_fn = KoLeoLoss()
     # proportion loss
     proportion_loss_fn = ProportionLoss(metric="ce", alpha=args.alpha)
+    memory_bank = MemoryBank()
     
     # ============ preparing optimizer ... ============
     params_groups = utils.get_params_groups(student)
@@ -308,7 +309,7 @@ def train_dino(args):
         # ============ training one epoch of DINO ... ============
         train_stats = train_one_epoch(student, teacher, teacher_without_ddp, dino_loss,
             data_loader, optimizer, lr_schedule, wd_schedule, momentum_schedule,
-            epoch, fp16_scaler, dataset, prototypes_layer, koLeo_loss_fn, proportion_loss_fn, args)   # se agrega la variable dataset, prototypes_layer, proportion_loss_fn y koLeo_loss_fn
+            epoch, fp16_scaler, dataset, prototypes_layer, koLeo_loss_fn, proportion_loss_fn, memory_bank, args)   # se agrega la variable dataset, memory_bank, prototypes_layer, proportion_loss_fn y koLeo_loss_fn
 
         # ============ writing logs ... ============
         save_dict = {
@@ -396,7 +397,7 @@ def compute_kl_loss_on_bagbatch(estimated_proportions, class_proportions, epsilo
 
 def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loader,
                     optimizer, lr_schedule, wd_schedule, momentum_schedule, epoch,
-                    fp16_scaler, dataset, prototypes_layer, koLeo_loss_fn, proportion_loss_fn, args):  # se agrega la variable dataset, prototypes_layer, proportion_loss_fn y koLeo_loss_fn
+                    fp16_scaler, dataset, prototypes_layer, koLeo_loss_fn, proportion_loss_fn, memory_bank, args):  # se agrega la variable dataset, memory_bank, prototypes_layer, proportion_loss_fn y koLeo_loss_fn
     metric_logger = utils.MetricLogger(delimiter="  ")
     header = 'Epoch: [{}/{}]'.format(epoch, args.epochs)
 
