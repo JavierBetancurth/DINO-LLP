@@ -683,8 +683,8 @@ class MemoryBank:
     def __init__(self, size, dim, num_crops=10):
         self.size = size * num_crops # Tamaño total del dataset
         self.dim = dim  # Dimensionalidad de las embeddings
-        self.embeddings = torch.zeros(size, dim).cuda()
-        self.assignments = -torch.ones(size).long().cuda()  # Inicialmente sin asignaciones
+        self.embeddings = torch.zeros(self.size, dim).cuda()
+        self.assignments = -torch.ones(self.size).long().cuda()  # Inicialmente sin asignaciones
 
     def update_memory(self, indices, embeddings, assignments):
         # Actualizar embeddings y asignaciones en el banco de memoria
