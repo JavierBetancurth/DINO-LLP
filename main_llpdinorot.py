@@ -446,13 +446,13 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
         
             # Asegúrate de que el índice de inicio no exceda el tamaño del banco de memoria
             if start_index >= memory_bank.size:
-                print(f"Se alcanzó el límite del banco de memoria en la iteración {it}.")
+                # print(f"Se alcanzó el límite del banco de memoria en la iteración {it}.")
                 break
         
             # Generar los índices para el banco de memoria
             end_index = start_index + 640
             if end_index > memory_bank.size:
-                print(f"Ajustando el índice final de {end_index} a {memory_bank.size}.")
+                # print(f"Ajustando el índice final de {end_index} a {memory_bank.size}.")
                 end_index = memory_bank.size
         
             indices = torch.arange(start_index, end_index).cuda()  # Genera los índices para el banco de memoria
