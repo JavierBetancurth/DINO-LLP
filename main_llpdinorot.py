@@ -431,15 +431,18 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
             # Normalizar los prototipos antes de Sinkhorn-Knopp
             prototypes = nn.functional.normalize(prototypes, dim=1, p=2)
                 
-            # Aplicar distributed_sinkhorn para las proporciones y calcular la pérdida de KL
+            # Asignar recortes a prototipos con Sinkhorn-Knopp
             prototypes_output = sinkhorn_knopp(prototypes, temp=args.epsilon, n_iterations=args.n_iterations)
+
+            # Actualizar el banco de memoria
+            memory_bank.update_memory(indices, student_output.detach(), prototypes_output.argmax(dim=1))
             
             # Asignar cada recorte a una clase (máxima probabilidad)
-            recorte_asignaciones = torch.argmax(prototypes_output, dim=1) # (640,)
+            # recorte_asignaciones = torch.argmax(prototypes_output, dim=1) # (640,)
             # Calcular las proporciones observadas en el lote
-            num_classes = 10  # Número de clases
-            proporciones_observadas = torch.bincount(recorte_asignaciones, minlength=num_classes).float()
-            proporciones_observadas /= recorte_asignaciones.size(0)  # Dividir por el número total de recortes
+            # num_classes = 10  # Número de clases
+            # proporciones_observadas = torch.bincount(recorte_asignaciones, minlength=num_classes).float()
+            # proporciones_observadas /= recorte_asignaciones.size(0)  # Dividir por el número total de recortes
             
             # Convertir prototypes_output a proporciones reales y calcular la pérdida KL
             # loss2 = compute_kl_loss_on_bagbatch(prototypes_output, class_proportions_global, epsilon=1e-8)
@@ -645,30 +648,17 @@ def sinkhorn_knopp(prototypes, temp, n_iterations):
         Q *= B  # the columns must sum to 1 so that Q is an assignment
         return Q.t()   
 
-'''
-class SimpleClassifier(nn.Module):
-    def __init__(self, student_network, nmb_prototypes):
-        """
-        Args:
-        - student_network (nn.Module): La red estudiante que extrae las características.
-        - nmb_prototypes (int): Número de prototipos/clases para la clasificación.
-        """
-        super(SimpleClassifier, self).__init__()
-        self.student = student_network  # Red estudiante
-        self.fc = nn.Linear(65536, nmb_prototypes)  # Capa de clasificación para 65536 características
+class MemoryBank:
+    def __init__(self, size, dim):
+        self.size = size  # Tamaño total del dataset
+        self.dim = dim  # Dimensionalidad de las embeddings
+        self.embeddings = torch.zeros(size, dim).cuda()
+        self.assignments = -torch.ones(size).long().cuda()  # Inicialmente sin asignaciones
 
-    def forward(self, x):
-        """
-        Args:
-        - x (Tensor): Entrada a la red.
-        
-        Returns:
-        - Tensor: Probabilidades de cada clase.
-        """
-        x = self.student(x)  # Pasar la entrada a través de la red estudiante
-        x = self.fc(x)  # Aplicar la capa de clasificación
-        return F.softmax(x, dim=-1)  # Retornar las probabilidades
-'''
+    def update_memory(self, indices, embeddings, assignments):
+        # Actualizar embeddings y asignaciones en el banco de memoria
+        self.embeddings[indices] = embeddings
+        self.assignments[indices] = assignments
 
 class DataAugmentationDINO(object):
     def __init__(self, global_crops_scale, local_crops_scale, local_crops_number):
