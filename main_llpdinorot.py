@@ -253,18 +253,8 @@ def train_dino(args):
     # Proportion loss
     proportion_loss_fn = ProportionLoss(metric="l1", alpha=args.alpha)
     
-    # Determinar el tamaño del banco de memoria
-    size_dataset = len(dataset)  # Número total de imágenes en el dataset
-    dim_embeddings = args.out_dim  # Dimensión de las embeddings, basada en el modelo
-    
-    # Crear el banco de memoria usando memmap
-    memory_bank = MemoryBank(size=size_dataset, dim=dim_embeddings)
-    
     # ============ preparing optimizer ... ============
     params_groups = utils.get_params_groups(student)
-    
-    # Incluir los parámetros de la capa de prototipos
-    # params_groups += [{'params': prototypes_layer.parameters()}]
 
     if args.optimizer == "adamw":
         optimizer = torch.optim.AdamW(params_groups)  # to use with ViTs
@@ -315,7 +305,7 @@ def train_dino(args):
         # ============ training one epoch of DINO ... ============
         train_stats = train_one_epoch(student, teacher, teacher_without_ddp, dino_loss,
             data_loader, optimizer, lr_schedule, wd_schedule, momentum_schedule,
-            epoch, fp16_scaler, dataset, prototypes_layer, koLeo_loss_fn, proportion_loss_fn, memory_bank, args)   # se agrega la variable dataset, memory_bank, prototypes_layer, proportion_loss_fn y koLeo_loss_fn
+            epoch, fp16_scaler, dataset, prototypes_layer, koLeo_loss_fn, proportion_loss_fn, args)   # se agrega la variable dataset, prototypes_layer, proportion_loss_fn y koLeo_loss_fn
 
         # ============ writing logs ... ============
         save_dict = {
@@ -403,7 +393,7 @@ def compute_kl_loss_on_bagbatch(estimated_proportions, class_proportions, epsilo
 
 def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loader,
                     optimizer, lr_schedule, wd_schedule, momentum_schedule, epoch,
-                    fp16_scaler, dataset, prototypes_layer, koLeo_loss_fn, proportion_loss_fn, memory_bank, args):  # se agrega la variable dataset, memory_bank, prototypes_layer, proportion_loss_fn y koLeo_loss_fn
+                    fp16_scaler, dataset, prototypes_layer, koLeo_loss_fn, proportion_loss_fn, args):  # se agrega la variable dataset, prototypes_layer, proportion_loss_fn y koLeo_loss_fn
     metric_logger = utils.MetricLogger(delimiter="  ")
     header = 'Epoch: [{}/{}]'.format(epoch, args.epochs)
 
@@ -650,32 +640,6 @@ def sinkhorn_knopp(prototypes, temp, n_iterations):
         Q *= B  # the columns must sum to 1 so that Q is an assignment
         return Q.t()  
     
-class MemoryBank:
-    def __init__(self, size, dim, num_crops=10, memmap_file_embeddings='memory_bank_embeddings.dat', memmap_file_assignments='memory_bank_assignments.dat'):
-        self.size = size * num_crops  # Tamaño total del dataset considerando los recortes
-        self.dim = dim  # Dimensión de las embeddings
-
-        # Usar memoria compartida en disco para embeddings (archivo binario)
-        self.embeddings = np.memmap(memmap_file_embeddings, dtype='float32', mode='w+', shape=(self.size, dim))
-
-        # Usar memoria compartida en disco para assignments (archivo binario)
-        self.assignments = np.memmap(memmap_file_assignments, dtype='int64', mode='w+', shape=(self.size,))
-    
-    def update_memory(self, indices, embeddings, assignments):
-        # Convertir a numpy antes de asignar en memmap para guardar en disco
-        embeddings = embeddings.cpu().numpy().astype(np.float32)
-        assignments = assignments.cpu().numpy().astype(np.int64)
-
-        # Actualizar la memoria compartida en disco
-        self.embeddings[indices] = embeddings
-        self.assignments[indices] = assignments
-    
-    def sync(self):
-        # Asegurar que los cambios se escriben en el disco
-        self.embeddings.flush()
-        self.assignments.flush()
-
-
 class DataAugmentationDINO(object):
     def __init__(self, global_crops_scale, local_crops_scale, local_crops_number):
         flip_and_color_jitter = transforms.Compose([
