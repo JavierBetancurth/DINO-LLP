@@ -695,22 +695,29 @@ class MemoryBank:
 '''
 
 class MemoryBank:
-    def __init__(self, size, dim, num_crops=10, fragment_size=10000):
+    def __init__(self, size, dim, num_crops=10, memmap_file_embeddings='memory_bank_embeddings.dat', memmap_file_assignments='memory_bank_assignments.dat'):
         self.size = size * num_crops  # Tamaño total del dataset considerando los recortes
-        self.dim = dim  # Dimensionalidad de las embeddings
-        self.fragment_size = fragment_size
-        self.embeddings = torch.zeros(self.size, dim, dtype=torch.float16).cpu()  # Usar float16
-        self.assignments = -torch.ones(self.size).long().cpu()
+        self.dim = dim  # Dimensión de las embeddings
 
+        # Usar memoria compartida en disco para embeddings (archivo binario)
+        self.embeddings = np.memmap(memmap_file_embeddings, dtype='float32', mode='w+', shape=(self.size, dim))
+
+        # Usar memoria compartida en disco para assignments (archivo binario)
+        self.assignments = np.memmap(memmap_file_assignments, dtype='int64', mode='w+', shape=(self.size,))
+    
     def update_memory(self, indices, embeddings, assignments):
-        # Divide las actualizaciones en fragmentos para evitar desbordar la memoria
-        for i in range(0, len(indices), self.fragment_size):
-            frag_indices = indices[i:i + self.fragment_size]
-            frag_embeddings = embeddings[i:i + self.fragment_size].to(torch.float16)
-            frag_assignments = assignments[i:i + self.fragment_size]
+        # Convertir a numpy antes de asignar en memmap para guardar en disco
+        embeddings = embeddings.cpu().numpy().astype(np.float32)
+        assignments = assignments.cpu().numpy().astype(np.int64)
 
-            self.embeddings[frag_indices] = frag_embeddings
-            self.assignments[frag_indices] = frag_assignments
+        # Actualizar la memoria compartida en disco
+        self.embeddings[indices] = embeddings
+        self.assignments[indices] = assignments
+    
+    def sync(self):
+        # Asegurar que los cambios se escriben en el disco
+        self.embeddings.flush()
+        self.assignments.flush()
 
 
 class DataAugmentationDINO(object):
