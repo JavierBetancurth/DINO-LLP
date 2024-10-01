@@ -434,11 +434,18 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
             # Aplicar distributed_sinkhorn para las proporciones y calcular la pérdida de KL
             prototypes_output = sinkhorn_knopp(prototypes, temp=args.epsilon, n_iterations=args.n_iterations)
             
+            # Asignar cada recorte a una clase (máxima probabilidad)
+            recorte_asignaciones = torch.argmax(prototypes_output, dim=1) # (640,)
+            # Calcular las proporciones observadas en el lote
+            num_classes = 10  # Número de clases
+            proporciones_observadas = torch.bincount(recorte_asignaciones, minlength=num_classes).float()
+            proporciones_observadas /= recorte_asignaciones.size(0)  # Dividir por el número total de recortes
+            
             # Convertir prototypes_output a proporciones reales y calcular la pérdida KL
             # loss2 = compute_kl_loss_on_bagbatch(prototypes_output, class_proportions_global, epsilon=1e-8)
             # Calcula las pérdidas
-            batch_proportion_prediction = prototypes_output.mean(dim=0)  # Promediar sobre todos los recortes (640, 10)
-            loss2 = proportion_loss_fn(batch_proportion_prediction, class_proportions_global[0])
+            # batch_proportion_prediction = prototypes_output.mean(dim=0)  # Promediar sobre todos los recortes (640, 10)
+            loss2 = proportion_loss_fn(proporciones_observadas, class_proportions_global[0])
 
             # Calcula la pérdida KoLeo
             loss3 = koLeo_loss_fn(student_output)
