@@ -253,16 +253,12 @@ def train_dino(args):
     # Proportion loss
     proportion_loss_fn = ProportionLoss(metric="ce", alpha=args.alpha)
     
-    # Determinar el tamaño del banco de memoria (ejemplo)
-    size_dataset = len(dataset)  # Número total de elementos en el dataset
+    # Determinar el tamaño del banco de memoria
+    size_dataset = len(dataset)  # Número total de imágenes en el dataset
     dim_embeddings = args.out_dim  # Dimensión de las embeddings, basada en el modelo
-
-    # Inicializar el banco de memoria con el tamaño y la dimensión correctos
+    
+    # Crear el banco de memoria usando memmap
     memory_bank = MemoryBank(size=size_dataset, dim=dim_embeddings)
-
-    # Mover el banco de memoria a la CPU
-    memory_bank.embeddings = memory_bank.embeddings.cpu()
-    memory_bank.assignments = memory_bank.assignments.cpu()
     
     # ============ preparing optimizer ... ============
     params_groups = utils.get_params_groups(student)
