@@ -251,7 +251,7 @@ def train_dino(args):
     # Koleo loss
     koLeo_loss_fn = KoLeoLoss()
     # Proportion loss
-    proportion_loss_fn = ProportionLoss(metric="ce", alpha=args.alpha)
+    proportion_loss_fn = ProportionLoss(metric="l1", alpha=args.alpha)
     
     # Determinar el tamaño del banco de memoria
     size_dataset = len(dataset)  # Número total de imágenes en el dataset
@@ -409,8 +409,6 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
 
     # Calcular proporciones globales del dataset
     class_proportions_global = calculate_class_proportions_in_dataset(dataset)
-    print("Class proportions global shape before unsqueeze:", class_proportions_global.shape)
-    class_proportions_global = class_proportions_global.unsqueeze(0).repeat(640, 1)  # Cambiar a (N, 10)
                         
     for it, (images, labels) in enumerate(metric_logger.log_every(data_loader, 10, header)):
         
@@ -440,46 +438,19 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
                 
             # Asignar recortes a prototipos con Sinkhorn-Knopp
             prototypes_output = sinkhorn_knopp(prototypes, temp=args.epsilon, n_iterations=args.n_iterations)
-
-            # Calcular el índice de inicio
-            start_index = it * 640
-        
-            # Asegúrate de que el índice de inicio no exceda el tamaño del banco de memoria
-            if start_index >= memory_bank.size:
-                # print(f"Se alcanzó el límite del banco de memoria en la iteración {it}.")
-                break
-        
-            # Generar los índices para el banco de memoria
-            end_index = start_index + 640
-            if end_index > memory_bank.size:
-                # print(f"Ajustando el índice final de {end_index} a {memory_bank.size}.")
-                end_index = memory_bank.size
-        
-            indices = torch.arange(start_index, end_index).cuda()  # Genera los índices para el banco de memoria
-        
-            # Mueve los tensores a la CPU antes de actualizar el banco de memoria
-            indices_cpu = indices.cpu()  # Mueve indices a la CPU
-            embeddings_cpu = student_output.detach().float().cpu()  # Mueve embeddings a la CPU
-            prototypes_cpu = prototypes_output.argmax(dim=1).long().cpu()  # Mueve las asignaciones a la CPU
-        
-            # Actualiza el banco de memoria en la CPU
-            memory_bank.update_memory(indices_cpu, embeddings_cpu, prototypes_cpu)
-
-            # Sincronizar con el disco
-            memory_bank.sync()
             
             # Asignar cada recorte a una clase (máxima probabilidad)
-            # recorte_asignaciones = torch.argmax(prototypes_output, dim=1) # (640,)
+            recorte_asignaciones = torch.argmax(prototypes_output, dim=1) # (640,)
             # Calcular las proporciones observadas en el lote
-            # num_classes = 10  # Número de clases
-            # proporciones_observadas = torch.bincount(recorte_asignaciones, minlength=num_classes).float()
-            # proporciones_observadas /= recorte_asignaciones.size(0)  # Dividir por el número total de recortes
+            num_classes = 10  # Número de clases
+            proporciones_observadas = torch.bincount(recorte_asignaciones, minlength=num_classes).float()
+            proporciones_observadas /= recorte_asignaciones.size(0)  # Dividir por el número total de recortes
             
             # Convertir prototypes_output a proporciones reales y calcular la pérdida KL
             # loss2 = compute_kl_loss_on_bagbatch(prototypes_output, class_proportions_global, epsilon=1e-8)
             # Calcula las pérdidas
             # batch_proportion_prediction = prototypes_output.mean(dim=0)  # Promediar sobre todos los recortes (640, 10)
-            loss2 = proportion_loss_fn(proporciones_observadas, class_proportions_global[0])
+            loss2 = proportion_loss_fn(proporciones_observadas, class_proportions_global)
 
             # Calcula la pérdida KoLeo
             loss3 = koLeo_loss_fn(student_output)
@@ -679,21 +650,6 @@ def sinkhorn_knopp(prototypes, temp, n_iterations):
         Q *= B  # the columns must sum to 1 so that Q is an assignment
         return Q.t()  
     
-'''
-class MemoryBank:
-    def __init__(self, size, dim, num_crops=10):
-        self.size = size * num_crops # Tamaño total del dataset
-        self.dim = dim  # Dimensionalidad de las embeddings
-        self.embeddings = torch.zeros(self.size, dim, dtype=torch.float16).cuda()
-        self.assignments = -torch.ones(self.size).long().cuda()  # Inicialmente sin asignaciones
-
-    def update_memory(self, indices, embeddings, assignments):
-        # Actualizar embeddings y asignaciones en el banco de memoria
-        embeddings = embeddings.to(torch.float16)
-        self.embeddings[indices] = embeddings
-        self.assignments[indices] = assignments
-'''
-
 class MemoryBank:
     def __init__(self, size, dim, num_crops=10, memmap_file_embeddings='memory_bank_embeddings.dat', memmap_file_assignments='memory_bank_assignments.dat'):
         self.size = size * num_crops  # Tamaño total del dataset considerando los recortes
