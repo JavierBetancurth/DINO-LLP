@@ -445,9 +445,16 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
             # Asignar recortes a prototipos con Sinkhorn-Knopp
             prototypes_output = sinkhorn_knopp(prototypes, temp=args.epsilon, n_iterations=args.n_iterations)
 
-            # Calculate the indices for the current batch
-            start_index = it * 640  # Calcula el índice de inicio para el lote actual
-            indices = torch.arange(start_index, start_index + 640).cuda()  # Genera los índices para el banco de memoria
+            # Calcular los índices para el lote actual
+            start_index = it * 640  # Calcula el índice de inicio para el lote actual (cada batch tiene 640 imágenes en total)
+            end_index = start_index + 640  # El índice de fin para el lote actual
+            
+            # Verifica que no sobrepase el tamaño del banco de memoria
+            if end_index > memory_bank.size:
+                raise IndexError(f"El índice final {end_index} supera el tamaño del banco de memoria {memory_bank.size}.")
+            
+            # Genera los índices para actualizar el banco de memoria
+            indices = torch.arange(start_index, end_index).cuda()
 
             # Mueve los tensores a la CPU antes de actualizar el banco de memoria
             indices_cpu = indices.cpu()  # Mueve indices a la CPU
