@@ -248,11 +248,13 @@ def train_dino(args):
         args.epochs,
     ).cuda()
 
-    # koleo loss
+    # Koleo loss
     koLeo_loss_fn = KoLeoLoss()
-    # proportion loss
+    # Proportion loss
     proportion_loss_fn = ProportionLoss(metric="ce", alpha=args.alpha)
-    memory_bank = MemoryBank()
+    
+    # Inicializar el banco de memoria con el tamaño y la dimensión correctos
+    memory_bank = MemoryBank(size=size_dataset, dim=dim_embeddings)
     
     # ============ preparing optimizer ... ============
     params_groups = utils.get_params_groups(student)
@@ -405,6 +407,13 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
     class_proportions_global = calculate_class_proportions_in_dataset(dataset)
     print("Class proportions global shape before unsqueeze:", class_proportions_global.shape)
     class_proportions_global = class_proportions_global.unsqueeze(0).repeat(640, 1)  # Cambiar a (N, 10)
+
+    # Determinar el tamaño del banco de memoria (ejemplo)
+    size_dataset = len(dataset)  # Número total de elementos en el dataset
+    dim_embeddings = args.out_dim  # Dimensión de las embeddings, basada en el modelo
+
+    # Inicializar el banco de memoria con el tamaño y la dimensión correctos
+    memory_bank = MemoryBank(size=size_dataset, dim=dim_embeddings)
                         
     for it, (images, labels) in enumerate(metric_logger.log_every(data_loader, 10, header)):
         
