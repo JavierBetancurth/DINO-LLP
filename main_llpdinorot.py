@@ -445,29 +445,13 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
             # Asignar recortes a prototipos con Sinkhorn-Knopp
             prototypes_output = sinkhorn_knopp(prototypes, temp=args.epsilon, n_iterations=args.n_iterations)
 
-            # Calcular los índices para el lote actual
-            start_index = (it * 160) % memory_bank.size  # Calcula el índice de inicio y asegúrate de que no exceda el tamaño total del banco de memoria
-            end_index = start_index + 160  # El índice de fin para el lote actual
-            
-            # Verifica que el índice final no exceda el tamaño del banco de memoria
-            if end_index > memory_bank.size:
-                end_index = memory_bank.size  # Limitar el índice final al tamaño del banco de memoria
-            
-            # Verifica que no sobrepase el tamaño del banco de memoria
-            if end_index > memory_bank.size:
-                raise IndexError(f"El índice final {end_index} supera el tamaño del banco de memoria {memory_bank.size}.")
-            
-            # Genera los índices para actualizar el banco de memoria
-            indices = torch.arange(start_index, end_index).cuda()
-
-            # Mueve los tensores a la CPU antes de actualizar el banco de memoria
-            indices_cpu = indices.cpu()  # Mueve indices a la CPU
-            embeddings_cpu = student_output.detach().float().cpu()  # Mueve embeddings a la CPU
-            prototypes_cpu = prototypes_output.argmax(dim=1).long().cpu()  # Mueve las asignaciones a la CPU
-
-            # Actualiza el banco de memoria en la CPU
-            memory_bank.update_memory(indices_cpu, embeddings_cpu, prototypes_cpu)
-
+            # Generar índices y resultados de embeddings y prototypes
+            start_index = it * 640
+            indices = torch.arange(start_index, start_index + 640)
+        
+            # Actualizar el banco de memoria
+            memory_bank.update_memory(indices.cpu(), student_output.detach(), prototypes_output.argmax(dim=1))
+        
             # Sincronizar con el disco
             memory_bank.sync()
             
