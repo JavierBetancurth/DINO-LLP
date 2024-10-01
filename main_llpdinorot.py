@@ -446,8 +446,12 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
             prototypes_output = sinkhorn_knopp(prototypes, temp=args.epsilon, n_iterations=args.n_iterations)
 
             # Calcular los índices para el lote actual
-            start_index = it * 640  # Calcula el índice de inicio para el lote actual (cada batch tiene 640 imágenes en total)
+            start_index = (it * 640) % memory_bank.size  # Calcula el índice de inicio y asegúrate de que no exceda el tamaño total del banco de memoria
             end_index = start_index + 640  # El índice de fin para el lote actual
+            
+            # Verifica que el índice final no exceda el tamaño del banco de memoria
+            if end_index > memory_bank.size:
+                end_index = memory_bank.size  # Limitar el índice final al tamaño del banco de memoria
             
             # Verifica que no sobrepase el tamaño del banco de memoria
             if end_index > memory_bank.size:
