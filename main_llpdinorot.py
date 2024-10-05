@@ -417,7 +417,7 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
             proporciones_observadas /= recorte_asignaciones.size(0)  # Dividir por el número total de recortes
             
             # Convertir prototypes_output a proporciones reales y calcular la pérdida KL
-            loss2 = compute_kl_loss_on_bagbatch(proporciones_observadas, class_proportions_global)
+            loss2 = compute_kl_loss_on_bagbatch(prototypes_output, class_proportions_global)
             # Calcula las pérdidas
             # batch_proportion_prediction = prototypes_output.mean(dim=0)  # Promediar sobre todos los recortes (640, 10)
             # loss2 = proportion_loss_fn(proporciones_observadas, class_proportions)
