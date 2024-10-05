@@ -331,65 +331,45 @@ def train_dino(args):
     print('Training time {}'.format(total_time_str))
 
 
-# Calcular las proporciones de cada lote
+# Calcular proporciones por lote y dataset
 def calculate_class_proportions_in_batch(labels, dataset):
-    labels_tensor = labels.clone().detach().cuda() # Usar directamente y mover a CUDA
+    labels_tensor = labels.clone().detach().cuda() 
     class_counts = torch.bincount(labels_tensor, minlength=len(dataset.classes))
-    class_proportions = class_counts.float() / len(labels_tensor)
+    total_samples_in_batch = len(labels_tensor)
+    
+    # Normalizamos las proporciones dividiendo por el tamaño total del lote
+    class_proportions = class_counts.float() / total_samples_in_batch
     
     return class_proportions
 
 def calculate_class_proportions_in_dataset(dataset):
-    # Obtener todas las etiquetas del dataset
-    all_labels = torch.tensor(dataset.targets, dtype=torch.long, device='cuda') # Usar directamente y mover a CUDA
-    # Contar el número de instancias por clase
+    all_labels = torch.tensor(dataset.targets, dtype=torch.long, device='cuda')
     class_counts = torch.bincount(all_labels, minlength=len(dataset.classes))
-    # Calcular las proporciones globales
+    
+    # Calcular proporciones globales basadas en el total de imágenes
     total_samples = len(all_labels)
     class_proportions = class_counts.float() / total_samples
 
     return class_proportions
 
-
 def compute_kl_loss_on_bagbatch(estimated_proportions, class_proportions, epsilon=1e-8):
-    if not isinstance(class_proportions, torch.Tensor):
-        real_proportions = torch.tensor(class_proportions, dtype=torch.float32).cuda()
-    else:
-        real_proportions = class_proportions
+    real_proportions = torch.tensor(class_proportions, dtype=torch.float32).cuda() if not isinstance(class_proportions, torch.Tensor) else class_proportions
+    avg_prob = torch.mean(estimated_proportions, dim=0)
+    avg_prob = torch.clamp(avg_prob, epsilon, 1 - epsilon)
 
-    # Asegurarse de que estimated_proportions también esté en la misma GPU
-    # estimated_proportions = estimated_proportions.cuda() if not estimated_proportions.is_cuda else estimated_proportions
-
-    # Forzar la normalización manualmente 
-    # estimated_proportions /= estimated_proportions.sum(dim=-1, keepdim=True)
-
-    '''
+     '''
     # Si se utiliza la salida de la capa de prototipos
     # Calcular las probabilidades y la pérdida KL
     probabilities = F.softmax(estimated_proportions, dim=-1)
     avg_prob = torch.mean(probabilities, dim=0)
     avg_prob = torch.clamp(avg_prob, epsilon, 1 - epsilon)
     '''
-    # Si se utiliza el algoritmo del Sinkhorn Knopp
-    avg_prob = torch.mean(estimated_proportions, dim=0)
-    avg_prob = torch.clamp(avg_prob, epsilon, 1 - epsilon)
     
-    # Calcular diferencias entre proporciones reales y estimadas
-    # differences = torch.abs(avg_prob - real_proportions)
-
-    # Ponderar la pérdida KL con base en las diferencias
-    loss = torch.sum(-real_proportions * torch.log(avg_prob), dim=-1)
-    
-    # Aplicar ponderación basada en las diferencias
-    # weighted_loss = loss * torch.exp(differences)  # Escalar la pérdida según las diferencias
-
-    # Ignorar las clases con proporciones reales de cero
-    # mask = real_proportions > 0 # [mask]
-    
-    # Calcular la pérdida KL utilizando las proporciones del lote
+    # Calcular la pérdida KL
     loss = torch.sum(-real_proportions * torch.log(avg_prob), dim=-1).mean()
-    
-    return loss # weighted_loss.mean() # loss
+
+    return loss
+
 
 def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loader,
                     optimizer, lr_schedule, wd_schedule, momentum_schedule, epoch,
@@ -437,10 +417,10 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
             proporciones_observadas /= recorte_asignaciones.size(0)  # Dividir por el número total de recortes
             
             # Convertir prototypes_output a proporciones reales y calcular la pérdida KL
-            # loss2 = compute_kl_loss_on_bagbatch(prototypes_output, class_proportions_global, epsilon=1e-8)
+            loss2 = compute_kl_loss_on_bagbatch(proporciones_observadas, class_proportions_global)
             # Calcula las pérdidas
             # batch_proportion_prediction = prototypes_output.mean(dim=0)  # Promediar sobre todos los recortes (640, 10)
-            loss2 = proportion_loss_fn(proporciones_observadas, class_proportions)
+            # loss2 = proportion_loss_fn(proporciones_observadas, class_proportions)
 
             # Calcula la pérdida KoLeo
             loss3 = koLeo_loss_fn(student_output)
@@ -616,8 +596,6 @@ def sinkhorn_knopp(prototypes, temp, n_iterations):
         Q = torch.exp(prototypes / temp).t()  # Q is K-by-B for consistency with notations from our paper
         B = Q.shape[1] * world_size  # Number of samples to assign
         K = Q.shape[0]  # How many prototypes
-        # wi = wi.cuda()
-        # print(K)
 
         # Make the matrix sums to 1
         sum_Q = torch.sum(Q)
