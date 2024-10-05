@@ -138,7 +138,7 @@ def get_args_parser():
         weight between losses.""")
     parser.add_argument('--alpha', type=float, default=0.5, help="""alpha parameter defined to 
         weight between losses.""")
-    parser.add_argument('--lambda', type=float, default=1.0, help="""alpha parameter defined to 
+    parser.add_argument('--eta', type=float, default=1.0, help="""alpha parameter defined to 
         weight between losses.""")
 
     # Misc
@@ -433,7 +433,7 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
             # loss = args.alpha * loss1 + (1 - args.alpha) * loss2
     
             # Incrementa el peso de la pérdida KL
-            loss = args.beta * loss1 + args.alpha * loss2 + args.lambda * loss3
+            loss = args.beta * loss1 + args.alpha * loss2 + args.eta * loss3
 
         # imprimir información de las salidas (solo una vez)
         if it == 0 and utils.is_main_process():
