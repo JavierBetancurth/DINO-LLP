@@ -431,11 +431,6 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
             # Incrementa el peso de la pérdida KL
             loss = loss1 + args.alpha * loss2 +  loss3
 
-        # Logging para monitorizar
-        # print(f"Batch {it} - Proporciones reales: {class_proportions}")
-        # print(f"Batch {it} - Proporciones estimadas: {torch.mean(prototypes_output, dim=0).cpu().numpy()}")
-        # print(f"Batch {it} - Pérdida DINO: {loss1.item()}, Pérdida KL: {loss2.item()}, Pérdida Total: {loss.item()}")
-
         # imprimir información de las salidas (solo una vez)
         if it == 0 and utils.is_main_process():
             print("teacher output shape:", teacher_output.shape)
@@ -451,6 +446,11 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
             # print("Loss2:", loss2.item())
             # print("Loss3:", loss3.item())
 
+        # === Aquí es donde puedes agregar la impresión para diagnosticar las proporciones ===
+        if it % 10 == 0:  # Ajusta el número de iteraciones para imprimir menos frecuentemente
+            avg_prob = torch.mean(prototypes_output, dim=0).cpu().numpy()
+            print(f"Iteración {it} - Proporciones predichas (estimadas):", avg_prob)
+            print(f"Iteración {it} - Proporciones reales:", class_proportions_global.cpu().numpy())
 
         # student update
         optimizer.zero_grad()
@@ -478,19 +478,6 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
             for param_q, param_k in zip(student.module.parameters(), teacher_without_ddp.parameters()):
                 param_k.data.mul_(m).add_((1 - m) * param_q.detach().data)
 
-        '''
-        # **Monitoreo de los prototipos**
-        if it % 50 == 0:  # Imprimir cada 50 iteraciones
-            with torch.no_grad():
-                print(f"Iteración {it} - Prototipos actuales (primeras 5 filas): {prototypes_layer.prototypes.weight[:5].cpu().numpy()}")
-                
-            # Monitorear gradientes de los prototipos
-            if prototypes_layer.prototypes.weight.grad is not None:
-                print(f"Gradientes de prototipos en iteración {it} (primeras 5 filas): {prototypes_layer.prototypes.weight.grad[:5].cpu().numpy()}")
-            else:
-                print(f"Gradientes de prototipos en iteración {it}: No se están actualizando los gradientes.")
-        '''
-
         if not math.isfinite(loss.item()):
             print("Loss is {}, stopping training".format(loss.item()), force=True)
             sys.exit(1)
@@ -508,17 +495,7 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
     # gather the stats from all processes
     metric_logger.synchronize_between_processes()
     print("Averaged stats:", metric_logger)
-
-    '''
-    # Imprimir proporciones estimadas y las proporciones reales al final de cada epoca
-    # Calcular proporciones globales del dataset
-    class_proportions_global = calculate_class_proportions_in_dataset(dataset)
-    print("Proporciones de clases reales dataset:", class_proportions_global)                 
-    real_proportions = class_proportions.clone().detach()  
-    print("Proporciones de clases reales lote:", real_proportions)
-    avg_estimated_proportions = torch.mean(prototypes_output, dim=0).clone().detach()
-    print("Proporciones promedio estimadas:", avg_estimated_proportions)
-    '''
+    
     return {k: meter.global_avg for k, meter in metric_logger.meters.items()}
 
 class DINOLoss(nn.Module):
