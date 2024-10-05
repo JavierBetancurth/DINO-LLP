@@ -134,8 +134,12 @@ def get_args_parser():
        help="number of prototypes")
 
     # losses parameters
-    parser.add_argument('--alpha', type=float, default=0.8, help="""alpha parameter defined to 
-        weight between dino and kl losses.""")
+    parser.add_argument('--beta', type=float, default=2.0, help="""alpha parameter defined to 
+        weight between losses.""")
+    parser.add_argument('--alpha', type=float, default=0.5, help="""alpha parameter defined to 
+        weight between losses.""")
+    parser.add_argument('--lambda', type=float, default=1.0, help="""alpha parameter defined to 
+        weight between losses.""")
 
     # Misc
     parser.add_argument('--data_path', default='/path/to/imagenet/train/', type=str,
@@ -429,7 +433,7 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
             # loss = args.alpha * loss1 + (1 - args.alpha) * loss2
     
             # Incrementa el peso de la pérdida KL
-            loss = loss1 + args.alpha * loss2 +  loss3
+            loss = args.beta * loss1 + args.alpha * loss2 + args.lambda * loss3
 
         # imprimir información de las salidas (solo una vez)
         if it == 0 and utils.is_main_process():
@@ -447,7 +451,7 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
             # print("Loss3:", loss3.item())
 
         # === Aquí es donde puedes agregar la impresión para diagnosticar las proporciones ===
-        if it % 10 == 0:  # Ajusta el número de iteraciones para imprimir menos frecuentemente
+        if it % 100 == 0:  # Ajusta el número de iteraciones para imprimir menos frecuentemente
             avg_prob = torch.mean(prototypes_output, dim=0).cpu().numpy()
             print(f"Iteración {it} - Proporciones predichas (estimadas):", avg_prob)
             print(f"Iteración {it} - Proporciones reales:", class_proportions_global.cpu().numpy())
