@@ -357,7 +357,7 @@ def compute_kl_loss_on_bagbatch(estimated_proportions, class_proportions, epsilo
     avg_prob = torch.mean(estimated_proportions, dim=0)
     avg_prob = torch.clamp(avg_prob, epsilon, 1 - epsilon)
 
-     '''
+    '''
     # Si se utiliza la salida de la capa de prototipos
     # Calcular las probabilidades y la pérdida KL
     probabilities = F.softmax(estimated_proportions, dim=-1)
