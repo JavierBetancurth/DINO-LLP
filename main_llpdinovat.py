@@ -374,6 +374,21 @@ def compute_kl_loss_on_bagbatch(estimated_proportions, class_proportions, epsilo
 
     return loss
 
+def calculate_proportions(outputs, epsilon=1e-8):
+    """
+    Calcula las proporciones de manera más robusta usando softmax
+    """
+    # Aplicar softmax para obtener probabilidades
+    probs = F.softmax(outputs, dim=1)
+    
+    # Promediar las probabilidades por batch
+    batch_proportions = torch.mean(probs, dim=0)
+    
+    # Aplicar clipping para evitar problemas numéricos
+    batch_proportions = torch.clamp(batch_proportions, epsilon, 1.0 - epsilon)
+    
+    return batch_proportions
+
 class ImprovedLLPLoss(nn.Module):
     def __init__(self, num_classes, entropy_weight=0.1):
         super().__init__()
