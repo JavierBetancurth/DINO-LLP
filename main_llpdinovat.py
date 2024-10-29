@@ -39,9 +39,7 @@ from vision_transformer import DINOHead
 # proportions
 # from loss.kl_loss import compute_kl_loss_on_bagbatch
 from proportions_assignments.prototypes_layer import Prototypes
-from loss.koleo_loss import KoLeoLoss
-from loss.koleo_loss_proportions import KoLeoLossProportions
-from loss.llp_loss import ProportionLoss
+
 
 torchvision_archs = sorted(name for name in torchvision_models.__dict__
     if name.islower() and not name.startswith("__")
@@ -128,18 +126,14 @@ def get_args_parser():
     # Sinkhorn Knopp parameters
     parser.add_argument("--epsilon", default=0.05, type=float,
        help="regularization parameter for Sinkhorn-Knopp algorithm")
-    parser.add_argument("--n_iterations", default=3, type=int,
+    parser.add_argument("--sinkhorn_iterations", default=3, type=int,
        help="number of iterations in Sinkhorn-Knopp algorithm")
     parser.add_argument("--nmb_prototypes", default=10, type=int,
        help="number of prototypes")
 
     # losses parameters
-    parser.add_argument('--beta', type=float, default=2.0, help="""alpha parameter defined to 
-        weight between losses.""")
-    parser.add_argument('--alpha', type=float, default=0.5, help="""alpha parameter defined to 
-        weight between losses.""")
-    parser.add_argument('--eta', type=float, default=1.0, help="""alpha parameter defined to 
-        weight between losses.""")
+    parser.add_argument('--alpha', type=float, default=0.8, help="""alpha parameter defined to 
+        weight between dino and kl losses.""")
 
     # Misc
     parser.add_argument('--data_path', default='/path/to/imagenet/train/', type=str,
@@ -177,9 +171,13 @@ def train_dino(args):
         pin_memory=True,
         drop_last=True,
     )
-
-    labels = dataset.targets
     
+    # dataset = datasets.ImageFolder(args.data_path, transform=transform)
+    # prueba datasets
+    #dataset = torchvision.datasets.CIFAR10(root=".", train=True,  transform=transform, download=True)
+    
+    labels = dataset.targets
+
     print(f"Data loaded: there are {len(dataset)} images.")
 
     # ============ building student and teacher networks ... ============
@@ -239,9 +237,6 @@ def train_dino(args):
         p.requires_grad = False
     print(f"Student and Teacher are built: they are both {args.arch} network.")
 
-    # ============ building prototype layer ... ============
-    prototypes_layer = Prototypes(output_dim=args.out_dim, nmb_prototypes=args.nmb_prototypes).cuda()
-
     # ============ preparing loss ... ============
     dino_loss = DINOLoss(
         args.out_dim,
@@ -252,14 +247,8 @@ def train_dino(args):
         args.epochs,
     ).cuda()
 
-    # Koleo loss
-    koLeo_loss_fn = KoLeoLoss()
-    # Proportion loss
-    proportion_loss_fn = ProportionLoss(metric="l1", alpha=args.alpha)
-    
     # ============ preparing optimizer ... ============
     params_groups = utils.get_params_groups(student)
-
     if args.optimizer == "adamw":
         optimizer = torch.optim.AdamW(params_groups)  # to use with ViTs
     elif args.optimizer == "sgd":
@@ -309,7 +298,7 @@ def train_dino(args):
         # ============ training one epoch of DINO ... ============
         train_stats = train_one_epoch(student, teacher, teacher_without_ddp, dino_loss,
             data_loader, optimizer, lr_schedule, wd_schedule, momentum_schedule,
-            epoch, fp16_scaler, dataset, prototypes_layer, koLeo_loss_fn, proportion_loss_fn, args)   # se agrega la variable dataset, prototypes_layer, proportion_loss_fn y koLeo_loss_fn
+            epoch, fp16_scaler, dataset, args)   # se agrega la variable dataset
 
         # ============ writing logs ... ============
         save_dict = {
@@ -335,87 +324,39 @@ def train_dino(args):
     print('Training time {}'.format(total_time_str))
 
 
-# Calcular proporciones por lote y dataset
+# J
 def calculate_class_proportions_in_batch(labels, dataset):
-    labels_tensor = labels.clone().detach().cuda() 
-    class_counts = torch.bincount(labels_tensor, minlength=len(dataset.classes))
-    total_samples_in_batch = len(labels_tensor)
-    
-    # Normalizamos las proporciones dividiendo por el tamaño total del lote
-    class_proportions = class_counts.float() / total_samples_in_batch
-    
-    return class_proportions
-
-def calculate_class_proportions_in_dataset(dataset):
-    all_labels = torch.tensor(dataset.targets, dtype=torch.long, device='cuda')
-    class_counts = torch.bincount(all_labels, minlength=len(dataset.classes))
-    
-    # Calcular proporciones globales basadas en el total de imágenes
-    total_samples = len(all_labels)
-    class_proportions = class_counts.float() / total_samples
-
+    class_counts = np.bincount(labels, minlength=len(dataset.classes))
+    class_proportions = class_counts / len(labels)
     return class_proportions
 
 def compute_kl_loss_on_bagbatch(estimated_proportions, class_proportions, epsilon=1e-8):
-    real_proportions = torch.tensor(class_proportions, dtype=torch.float32).cuda() if not isinstance(class_proportions, torch.Tensor) else class_proportions
-    avg_prob = torch.mean(estimated_proportions, dim=0)
-    avg_prob = torch.clamp(avg_prob, epsilon, 1 - epsilon)
-
-    '''
-    # Si se utiliza la salida de la capa de prototipos
+    real_proportions = torch.tensor(class_proportions, dtype=torch.float32).cuda()
+    
     # Calcular las probabilidades y la pérdida KL
     probabilities = F.softmax(estimated_proportions, dim=-1)
     avg_prob = torch.mean(probabilities, dim=0)
     avg_prob = torch.clamp(avg_prob, epsilon, 1 - epsilon)
-    '''
-    
-    # Calcular la pérdida KL
-    loss = torch.sum(-real_proportions * torch.log(avg_prob), dim=-1).mean()
 
+    # Ignorar las clases con proporciones reales de cero
+    # mask = real_proportions > 0 ---[mask]
+    
+    # Calcular la pérdida KL utilizando las proporciones del lote
+    loss = torch.sum(-real_proportions * torch.log(avg_prob), dim=-1).mean()
+    
     return loss
 
-def calculate_proportions(outputs, epsilon=1e-8):
-    """
-    Calcula las proporciones de manera más robusta usando softmax
-    """
-    # Aplicar softmax para obtener probabilidades
-    probs = F.softmax(outputs, dim=1)
-    
-    # Promediar las probabilidades por batch
-    batch_proportions = torch.mean(probs, dim=0)
-    
-    # Aplicar clipping para evitar problemas numéricos
-    batch_proportions = torch.clamp(batch_proportions, epsilon, 1.0 - epsilon)
-    
-    return batch_proportions
-
-class ImprovedLLPLoss(nn.Module):
-    def __init__(self, num_classes, entropy_weight=0.1):
-        super().__init__()
-        self.num_classes = num_classes
-        self.entropy_weight = entropy_weight
-    
-    def forward(self, estimated_proportions, true_proportions):
-        # KL Divergence entre las proporciones verdaderas y estimadas
-        kl_loss = F.kl_div(
-            estimated_proportions.log(), 
-            true_proportions,
-            reduction='batchmean'
-        )
-        
-        # Añadir regularización de entropía para evitar asignaciones degeneradas
-        entropy = -torch.sum(estimated_proportions * torch.log(estimated_proportions + 1e-8))
-        
-        return kl_loss - self.entropy_weight * entropy
-
 def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loader,
-                    optimizer, lr_schedule, wd_schedule, momentum_schedule, epoch,
-                    fp16_scaler, dataset, prototypes_layer, koLeo_loss_fn, proportion_loss_fn, args):  # se agrega la variable dataset, prototypes_layer, proportion_loss_fn y koLeo_loss_fn
+                    optimizer, lr_schedule, wd_schedule, momentum_schedule,epoch,
+                    fp16_scaler, dataset, args):  # se agrega la variable dataset
     metric_logger = utils.MetricLogger(delimiter="  ")
     header = 'Epoch: [{}/{}]'.format(epoch, args.epochs)
 
-    # Calcular proporciones globales del dataset
-    class_proportions_global = calculate_class_proportions_in_dataset(dataset)
+    # Crear una instancia de Prototypes fuera del bucle
+    output_dim = args.out_dim
+    prototypes_layer = Prototypes(output_dim, args.nmb_prototypes).cuda()
+                        
+    # class_proportions_list = []  # lista para almacenar las proporciones de clase por lote
                         
     for it, (images, labels) in enumerate(metric_logger.log_every(data_loader, 10, header)):
         
@@ -436,30 +377,20 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
             teacher_output = teacher(images[:2])
             student_output = student(images)
             loss1 = dino_loss(student_output, teacher_output, epoch)
-
-            # Paso a través de la capa de Prototipos
-            prototypes = prototypes_layer(teacher_output)
-                
-            # Normalizar los prototipos antes de Sinkhorn-Knopp
-            prototypes = nn.functional.normalize(prototypes, dim=1, p=2)
-                
-            # Calcular proporciones estimadas
-            estimated_proportions = calculate_proportions(prototypes)
             
-            # Convertir prototypes_output a proporciones reales y calcular la pérdida KL
-            # loss2 = compute_kl_loss_on_bagbatch(prototypes_output, class_proportions_global)
-
-             # Calcular pérdidas
-            loss2 = ImprovedLLPLoss(num_classes=args.nmb_prototypes)(
-                estimated_proportions, 
-                true_proportions
-            )
-
+            # Paso a través de la capa de Prototipos
+            prototypes_output = prototypes_layer(teacher_output)
+            
+            # Calcular la pérdida KL
+            loss2 = compute_kl_loss_on_bagbatch(prototypes_output, class_proportions, epsilon=1e-8)
+            
             # Combinar las pérdidas usando el parámetro alpha
             # loss = args.alpha * loss1 + (1 - args.alpha) * loss2
-    
-            # Incrementa el peso de la pérdida KL
-            loss = args.beta * loss1 + args.alpha * loss2
+            loss = loss1 + loss2
+
+        if not math.isfinite(loss.item()):
+            print("Loss is {}, stopping training".format(loss.item()), force=True)
+            sys.exit(1)
 
         # imprimir información de las salidas (solo una vez)
         if it == 0 and utils.is_main_process():
@@ -467,20 +398,6 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
             print("teacher output type:", teacher_output.dtype)
             print("student output shape:", student_output.shape)
             print("student output type:", student_output.dtype)
-
-            print("Teacher output shape:", teacher_output.shape)
-            print("Student output shape:", student_output.shape)
-            # print("Prototypes output shape:", prototypes_output.shape)
-            # print("Class proportions shape:", class_proportions_global.shape)
-            # print("Loss1:", loss1.item())
-            # print("Loss2:", loss2.item())
-            # print("Loss3:", loss3.item())
-
-        # === Aquí es donde puedes agregar la impresión para diagnosticar las proporciones ===
-        if it % 100 == 0:  # Ajusta el número de iteraciones para imprimir menos frecuentemente
-            avg_prob = torch.mean(prototypes_output, dim=0).cpu().numpy()
-            print(f"Iteración {it} - Proporciones predichas (estimadas):", avg_prob)
-            print(f"Iteración {it} - Proporciones reales:", class_proportions_global.cpu().numpy())
 
         # student update
         optimizer.zero_grad()
@@ -508,16 +425,11 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
             for param_q, param_k in zip(student.module.parameters(), teacher_without_ddp.parameters()):
                 param_k.data.mul_(m).add_((1 - m) * param_q.detach().data)
 
-        if not math.isfinite(loss.item()):
-            print("Loss is {}, stopping training".format(loss.item()), force=True)
-            sys.exit(1)
-
         # logging
         torch.cuda.synchronize()
         metric_logger.update(loss=loss.item())
         metric_logger.update(loss_dino=loss1.item())
         metric_logger.update(loss_kl=loss2.item())
-        metric_logger.update(loss_koleo=loss3.item())
         metric_logger.update(lr=optimizer.param_groups[0]["lr"])
         metric_logger.update(wd=optimizer.param_groups[0]["weight_decay"])
         # metric_logger.update(alpha=alpha)
@@ -525,7 +437,11 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
     # gather the stats from all processes
     metric_logger.synchronize_between_processes()
     print("Averaged stats:", metric_logger)
-    
+
+    # Print class proportions
+    # for i, proportions in enumerate(class_proportions_list):
+        # print(f"Proporciones de clase en lote {i}: {proportions}")
+                   
     return {k: meter.global_avg for k, meter in metric_logger.meters.items()}
 
 class DINOLoss(nn.Module):
@@ -595,36 +511,7 @@ class DINOLoss(nn.Module):
         # ema update
         self.center = self.center * self.center_momentum + batch_center * (1 - self.center_momentum)
 
-@torch.no_grad()
-def sinkhorn_knopp(prototypes, temp, n_iterations):
-        prototypes = prototypes.float()
-        # print(prototypes.shape)
-        world_size = dist.get_world_size() if dist.is_initialized() else 1
-        Q = torch.exp(prototypes / temp).t()  # Q is K-by-B for consistency with notations from our paper
-        B = Q.shape[1] * world_size  # Number of samples to assign
-        K = Q.shape[0]  # How many prototypes
 
-        # Make the matrix sums to 1
-        sum_Q = torch.sum(Q)
-        if dist.is_initialized():
-            dist.all_reduce(sum_Q)
-        Q /= sum_Q
-
-        for it in range(n_iterations):
-            # Normalize each row: total weight per prototype must be 1/K
-            sum_of_rows = torch.sum(Q, dim=1, keepdim=True)
-            if dist.is_initialized():
-                dist.all_reduce(sum_of_rows)
-            Q /= sum_of_rows
-            Q /= K
-
-            # Normalize each column: total weight per sample must be 1/B
-            Q /= torch.sum(Q, dim=0, keepdim=True)
-            Q /= B
-
-        Q *= B  # the columns must sum to 1 so that Q is an assignment
-        return Q.t()  
-    
 class DataAugmentationDINO(object):
     def __init__(self, global_crops_scale, local_crops_scale, local_crops_number):
         flip_and_color_jitter = transforms.Compose([
@@ -637,7 +524,7 @@ class DataAugmentationDINO(object):
         ])
         normalize = transforms.Compose([
             transforms.ToTensor(),
-            transforms.Normalize((0.3441, 0.3801, 0.4076), (0.2023, 0.1366, 0.1153)),       
+            transforms.Normalize((0.3444, 0.3804, 0.4079), (0.2028, 0.1370, 0.1156)),
         ]) # Normalize((0.4914, 0.4822, 0.4465), (0.2470, 0.2435, 0.2616)) 
 
         # first global crop
