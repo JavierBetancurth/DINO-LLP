@@ -31,20 +31,17 @@ import torch.nn.functional as F
 from torchvision import datasets, transforms
 from torchvision import models as torchvision_models
 
-from torch.utils.data import DataLoader
-from torch.utils.data.dataset import random_split
-
 import utils
 import vision_transformer as vits
 from vision_transformer import DINOHead
 
 
 # proportions
-from loss.kl_loss import compute_kl_loss_on_bagbatch
+# from loss.kl_loss import compute_kl_loss_on_bagbatch
 from proportions_assignments.prototypes_layer import Prototypes
-
-from data.bags import BagMiniBatch, load_llp_dataset, BagSampler, Iteration
-
+from loss.koleo_loss import KoLeoLoss
+from loss.koleo_loss_proportions import KoLeoLossProportions
+from loss.llp_loss import ProportionLoss
 
 torchvision_archs = sorted(name for name in torchvision_models.__dict__
     if name.islower() and not name.startswith("__")
@@ -80,10 +77,10 @@ def get_args_parser():
     parser.add_argument('--warmup_teacher_temp', default=0.04, type=float,
         help="""Initial value for the teacher temperature: 0.04 works well in most cases.
         Try decreasing it if the training loss does not decrease.""")
-    parser.add_argument('--teacher_temp', default=0.04, type=float, help="""Final value (after linear warmup)
+    parser.add_argument('--teacher_temp', default=0.04, type=float, help="""Final value (after linear warmup) 
         of the teacher temperature. For most experiments, anything above 0.07 is unstable. We recommend
         starting with the default value of 0.04 and increase this slightly if needed.""")
-    parser.add_argument('--warmup_teacher_temp_epochs', default=0, type=int,
+    parser.add_argument('--warmup_teacher_temp_epochs', default=30, type=int,
         help='Number of warmup epochs for the teacher temperature (Default: 30).')
 
     # Training/Optimization parameters
@@ -101,7 +98,7 @@ def get_args_parser():
         help optimization for larger ViT architectures. 0 for disabling.""")
     parser.add_argument('--batch_size_per_gpu', default=64, type=int,
         help='Per-GPU batch-size : number of distinct images loaded on one GPU.')
-    parser.add_argument('--epochs', default=10, type=int, help='Number of epochs of training.')
+    parser.add_argument('--epochs', default=300, type=int, help='Number of epochs of training.')
     parser.add_argument('--freeze_last_layer', default=1, type=int, help="""Number of epochs
         during which we keep the output layer fixed. Typically doing so during
         the first epoch helps training. Try increasing this value if the loss does not decrease.""")
@@ -131,56 +128,30 @@ def get_args_parser():
     # Sinkhorn Knopp parameters
     parser.add_argument("--epsilon", default=0.05, type=float,
        help="regularization parameter for Sinkhorn-Knopp algorithm")
-    parser.add_argument("--sinkhorn_iterations", default=3, type=int,
+    parser.add_argument("--n_iterations", default=3, type=int,
        help="number of iterations in Sinkhorn-Knopp algorithm")
     parser.add_argument("--nmb_prototypes", default=10, type=int,
        help="number of prototypes")
 
-
-    
-     # basic arguments
-    parser.add_argument("--obj_dir", default="./obj")
-    parser.add_argument("--dataset_dir", default="./obj/dataset")
-    parser.add_argument("--result_dir", default="./results")
-    parser.add_argument("-d", "--dataset_name", type=str)
-    parser.add_argument("--valid", type=float, default=0.1)
-    
-    # bag creation algorithms
-    parser.add_argument("--alg", choices=["uniform", "kmeans"], default="uniform")
-    parser.add_argument("-b", "--bag_size", type=int, default=64)
-    parser.add_argument("--replacement", action="store_true")
-    parser.add_argument("-k", "--n_clusters", type=int)
-    parser.add_argument("--reduction", type=int, default=600)
-
-    # coefficient for proportion loss
-    parser.add_argument("--num_bags", default=-1, type=int)
-    parser.add_argument("--mini_batch_size", type=int, default=2)
-    
-
-    
-
     # losses parameters
-    parser.add_argument('--alpha', type=float, default=0.8, help="""alpha parameter defined to 
-        weight between dino and kl losses.""")    
+    parser.add_argument('--beta', type=float, default=2.0, help="""alpha parameter defined to 
+        weight between losses.""")
+    parser.add_argument('--alpha', type=float, default=0.5, help="""alpha parameter defined to 
+        weight between losses.""")
+    parser.add_argument('--eta', type=float, default=1.0, help="""alpha parameter defined to 
+        weight between losses.""")
 
     # Misc
     parser.add_argument('--data_path', default='/path/to/imagenet/train/', type=str,
         help='Please specify path to the ImageNet training data.')
     parser.add_argument('--output_dir', default=".", type=str, help='Path to save logs and checkpoints.')
-    parser.add_argument('--saveckp_freq', default=20, type=int, help='Save checkpoint every x epochs.')
+    parser.add_argument('--saveckp_freq', default=50, type=int, help='Save checkpoint every x epochs.')
     parser.add_argument('--seed', default=0, type=int, help='Random seed.')
     parser.add_argument('--num_workers', default=2, type=int, help='Number of data loading workers per GPU.')
     parser.add_argument("--dist_url", default="env://", type=str, help="""url used to set up
         distributed training; see https://pytorch.org/docs/stable/distributed.html""")
     parser.add_argument("--local_rank", default=0, type=int, help="Please ignore and do not set this argument.")
     return parser
-
-def train_valid_split(dataset, valid_ratio, seed):
-    torch.manual_seed(seed)
-    valid_size = int(valid_ratio * len(dataset))
-    train_size = len(dataset) - valid_size
-    train, valid = random_split(dataset, [train_size, valid_size])
-    return train, valid
 
 def train_dino(args):
     utils.init_distributed_mode(args)
@@ -196,43 +167,19 @@ def train_dino(args):
         args.local_crops_number,
     )
 
-    # load LLP dataset
-    if args.alg == "uniform":
-        dataset, bags = load_llp_dataset(args.dataset_dir,
-                                         args.obj_dir,
-                                         args.dataset_name,
-                                         args.alg,
-                                         replacement=args.replacement,
-                                         bag_size=args.bag_size)
-    elif args.alg == "kmeans":
-        dataset, bags = load_llp_dataset(args.dataset_dir,
-                                         args.obj_dir,
-                                         args.dataset_name,
-                                         args.alg,
-                                         n_clusters=args.n_clusters,
-                                         reduction=args.reduction)
-    else:
-        raise NameError("The bag creation algorithm is unknown")
+    dataset = datasets.ImageFolder(args.data_path, transform=transform)
+    sampler = torch.utils.data.DistributedSampler(dataset, shuffle=True)
+    data_loader = torch.utils.data.DataLoader(
+        dataset,
+        sampler=sampler,
+        batch_size=args.batch_size_per_gpu,
+        num_workers=args.num_workers,
+        pin_memory=True,
+        drop_last=True,
+    )
 
-    # consturct data loader
-    train_bags, valid_bags = train_valid_split(bags, args.valid, args.seed)
-    train_bag_sampler = BagSampler(train_bags, args.num_bags)
-    data_loader = DataLoader(dataset["train"],
-                              batch_sampler=train_bag_sampler,
-                              pin_memory=True,
-                              num_workers=2)
-    valid_loader = None
-    if args.valid > 0:
-        valid_bag_sampler = BagSampler(valid_bags, num_bags=-1)
-        valid_loader = DataLoader(dataset["train"],
-                                  batch_sampler=valid_bag_sampler,
-                                  pin_memory=True,
-                                  num_workers=2)
-    test_loader = DataLoader(dataset["test"],
-                             batch_size=256,
-                             pin_memory=True,
-                             num_workers=2)
-
+    labels = dataset.targets
+    
     print(f"Data loaded: there are {len(dataset)} images.")
 
     # ============ building student and teacher networks ... ============
@@ -292,6 +239,9 @@ def train_dino(args):
         p.requires_grad = False
     print(f"Student and Teacher are built: they are both {args.arch} network.")
 
+    # ============ building prototype layer ... ============
+    prototypes_layer = Prototypes(output_dim=args.out_dim, nmb_prototypes=args.nmb_prototypes).cuda()
+
     # ============ preparing loss ... ============
     dino_loss = DINOLoss(
         args.out_dim,
@@ -302,8 +252,14 @@ def train_dino(args):
         args.epochs,
     ).cuda()
 
+    # Koleo loss
+    koLeo_loss_fn = KoLeoLoss()
+    # Proportion loss
+    proportion_loss_fn = ProportionLoss(metric="l1", alpha=args.alpha)
+    
     # ============ preparing optimizer ... ============
     params_groups = utils.get_params_groups(student)
+
     if args.optimizer == "adamw":
         optimizer = torch.optim.AdamW(params_groups)  # to use with ViTs
     elif args.optimizer == "sgd":
@@ -313,7 +269,7 @@ def train_dino(args):
     # for mixed precision training
     fp16_scaler = None
     if args.use_fp16:
-        fp16_scaler = torch.cuda.amp.GradScaler()
+        fp16_scaler = torch.amp.GradScaler()
 
     # ============ init schedulers ... ============
     lr_schedule = utils.cosine_scheduler(
@@ -353,7 +309,7 @@ def train_dino(args):
         # ============ training one epoch of DINO ... ============
         train_stats = train_one_epoch(student, teacher, teacher_without_ddp, dino_loss,
             data_loader, optimizer, lr_schedule, wd_schedule, momentum_schedule,
-            epoch, fp16_scaler, dataset, args)   # se agrega la variable dataset
+            epoch, fp16_scaler, dataset, prototypes_layer, koLeo_loss_fn, proportion_loss_fn, args)   # se agrega la variable dataset, prototypes_layer, proportion_loss_fn y koLeo_loss_fn
 
         # ============ writing logs ... ============
         save_dict = {
@@ -379,29 +335,59 @@ def train_dino(args):
     print('Training time {}'.format(total_time_str))
 
 
-# J
+# Calcular proporciones por lote y dataset
 def calculate_class_proportions_in_batch(labels, dataset):
-    class_counts = np.bincount(labels, minlength=len(dataset.classes))
-    class_proportions = class_counts / len(labels)
+    labels_tensor = labels.clone().detach().cuda() 
+    class_counts = torch.bincount(labels_tensor, minlength=len(dataset.classes))
+    total_samples_in_batch = len(labels_tensor)
+    
+    # Normalizamos las proporciones dividiendo por el tamaño total del lote
+    class_proportions = class_counts.float() / total_samples_in_batch
+    
     return class_proportions
+
+def calculate_class_proportions_in_dataset(dataset):
+    all_labels = torch.tensor(dataset.targets, dtype=torch.long, device='cuda')
+    class_counts = torch.bincount(all_labels, minlength=len(dataset.classes))
+    
+    # Calcular proporciones globales basadas en el total de imágenes
+    total_samples = len(all_labels)
+    class_proportions = class_counts.float() / total_samples
+
+    return class_proportions
+
+def compute_kl_loss_on_bagbatch(estimated_proportions, class_proportions, epsilon=1e-8):
+    real_proportions = torch.tensor(class_proportions, dtype=torch.float32).cuda() if not isinstance(class_proportions, torch.Tensor) else class_proportions
+    avg_prob = torch.mean(estimated_proportions, dim=0)
+    avg_prob = torch.clamp(avg_prob, epsilon, 1 - epsilon)
+
+    '''
+    # Si se utiliza la salida de la capa de prototipos
+    # Calcular las probabilidades y la pérdida KL
+    probabilities = F.softmax(estimated_proportions, dim=-1)
+    avg_prob = torch.mean(probabilities, dim=0)
+    avg_prob = torch.clamp(avg_prob, epsilon, 1 - epsilon)
+    '''
+    
+    # Calcular la pérdida KL
+    loss = torch.sum(-real_proportions * torch.log(avg_prob), dim=-1).mean()
+
+    return loss
 
 
 def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loader,
-                    optimizer, lr_schedule, wd_schedule, momentum_schedule,epoch,
-                    fp16_scaler, dataset, args):    # se agrega la variable dataset
+                    optimizer, lr_schedule, wd_schedule, momentum_schedule, epoch,
+                    fp16_scaler, dataset, prototypes_layer, koLeo_loss_fn, proportion_loss_fn, args):  # se agrega la variable dataset, prototypes_layer, proportion_loss_fn y koLeo_loss_fn
     metric_logger = utils.MetricLogger(delimiter="  ")
     header = 'Epoch: [{}/{}]'.format(epoch, args.epochs)
 
-
-                        
-    class_proportions_list = []  # lista para almacenar las proporciones de clase por lote
-    
+    # Calcular proporciones globales del dataset
+    class_proportions_global = calculate_class_proportions_in_dataset(dataset)
                         
     for it, (images, labels) in enumerate(metric_logger.log_every(data_loader, 10, header)):
         
         # Calcular las proporciones de clase en el lote actual
         class_proportions = calculate_class_proportions_in_batch(labels, dataset)
-        class_proportions_list.append(class_proportions)
         
         # update weight decay and learning rate according to their schedule
         it = len(data_loader) * epoch + it  # global training iteration
@@ -413,43 +399,41 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
         # move images to gpu
         images = [im.cuda(non_blocking=True) for im in images]
         # teacher and student forward passes + compute dino loss
-        with torch.cuda.amp.autocast(fp16_scaler is not None):
-            teacher_output = teacher(images[:2])  # only the 2 global views pass through the teacher
+        with torch.amp.autocast(device_type='cuda', dtype=torch.float16, enabled=fp16_scaler is not None):
+            teacher_output = teacher(images[:2])
             student_output = student(images)
             loss1 = dino_loss(student_output, teacher_output, epoch)
 
-            
             # Paso a través de la capa de Prototipos
-
-            output_dim = 65536
-
-            # Crear una instancia de Prototypes nmb_prototypes
-            # nmb_prototypes = 10  # O la cantidad deseada de clases
-            prototypes_layer = Prototypes(output_dim, args.nmb_prototypes)
-
-            # Mover la capa de Prototipos a la GPU si está disponible
-            prototypes_layer = prototypes_layer.cuda()
-
-            # Asegurarse de que student_output sea un tensor de PyTorch si no lo es
-            # student_output = torch.tensor(student_output, dtype=torch.float32)
-            student_output.clone().detach().requires_grad_(True)
-
-            # Paso a través de la capa de Prototipos
-            prototypes_output = prototypes_layer(student_output)
+            prototypes = prototypes_layer(student_output)
+                
+            # Normalizar los prototipos antes de Sinkhorn-Knopp
+            prototypes = nn.functional.normalize(prototypes, dim=1, p=2)
+                
+            # Asignar recortes a prototipos con Sinkhorn-Knopp
+            prototypes_output = sinkhorn_knopp(prototypes, temp=args.epsilon, n_iterations=args.n_iterations)
             
-            # print(prototypes_output)
-            # Calcular la pérdida KL entre las salidas de Prototipos y las proporciones reales del lote
-            loss2 = compute_kl_loss_on_bagbatch(prototypes_output, class_proportions_list, epsilon=1e-8)
+            # Asignar cada recorte a una clase (máxima probabilidad)
+            recorte_asignaciones = torch.argmax(prototypes_output, dim=1) # (640,)
+            # Calcular las proporciones observadas en el lote
+            num_classes = 10  # Número de clases
+            proporciones_observadas = torch.bincount(recorte_asignaciones, minlength=num_classes).float()
+            proporciones_observadas /= recorte_asignaciones.size(0)  # Dividir por el número total de recortes
             
-            # print(loss1, loss2)
-            # loss = loss1 + loss2
-            # Combine the losses using the alpha parameter
-            loss = args.alpha * loss1 + (1 - args.alpha) * loss2
+            # Convertir prototypes_output a proporciones reales y calcular la pérdida KL
+            loss2 = compute_kl_loss_on_bagbatch(prototypes_output, class_proportions_global)
+            # Calcula las pérdidas
+            # batch_proportion_prediction = prototypes_output.mean(dim=0)  # Promediar sobre todos los recortes (640, 10)
+            # loss2 = proportion_loss_fn(proporciones_observadas, class_proportions)
 
+            # Calcula la pérdida KoLeo
+            loss3 = koLeo_loss_fn(student_output)
 
-        if not math.isfinite(loss.item()):
-            print("Loss is {}, stopping training".format(loss.item()), force=True)
-            sys.exit(1)
+            # Combinar las pérdidas usando el parámetro alpha
+            # loss = args.alpha * loss1 + (1 - args.alpha) * loss2
+    
+            # Incrementa el peso de la pérdida KL
+            loss = args.beta * loss1 + args.alpha * loss2 + args.eta * loss3
 
         # imprimir información de las salidas (solo una vez)
         if it == 0 and utils.is_main_process():
@@ -457,6 +441,20 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
             print("teacher output type:", teacher_output.dtype)
             print("student output shape:", student_output.shape)
             print("student output type:", student_output.dtype)
+
+            print("Teacher output shape:", teacher_output.shape)
+            print("Student output shape:", student_output.shape)
+            # print("Prototypes output shape:", prototypes_output.shape)
+            # print("Class proportions shape:", class_proportions_global.shape)
+            # print("Loss1:", loss1.item())
+            # print("Loss2:", loss2.item())
+            # print("Loss3:", loss3.item())
+
+        # === Aquí es donde puedes agregar la impresión para diagnosticar las proporciones ===
+        if it % 100 == 0:  # Ajusta el número de iteraciones para imprimir menos frecuentemente
+            avg_prob = torch.mean(prototypes_output, dim=0).cpu().numpy()
+            print(f"Iteración {it} - Proporciones predichas (estimadas):", avg_prob)
+            print(f"Iteración {it} - Proporciones reales:", class_proportions_global.cpu().numpy())
 
         # student update
         optimizer.zero_grad()
@@ -484,19 +482,25 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
             for param_q, param_k in zip(student.module.parameters(), teacher_without_ddp.parameters()):
                 param_k.data.mul_(m).add_((1 - m) * param_q.detach().data)
 
+        if not math.isfinite(loss.item()):
+            print("Loss is {}, stopping training".format(loss.item()), force=True)
+            sys.exit(1)
+
         # logging
         torch.cuda.synchronize()
         metric_logger.update(loss=loss.item())
+        metric_logger.update(loss_dino=loss1.item())
+        metric_logger.update(loss_kl=loss2.item())
+        metric_logger.update(loss_koleo=loss3.item())
         metric_logger.update(lr=optimizer.param_groups[0]["lr"])
         metric_logger.update(wd=optimizer.param_groups[0]["weight_decay"])
+        # metric_logger.update(alpha=alpha)
+        # metric_logger.update(accuracy=accuracy)
     # gather the stats from all processes
     metric_logger.synchronize_between_processes()
     print("Averaged stats:", metric_logger)
-    return {k: meter.global_avg for k, meter in metric_logger.meters.items()}
     
-    for i, proportions in enumerate(class_proportions_list):
-        print(f"Proporciones de clase en lote {i + 1}: {proportions}")
-
+    return {k: meter.global_avg for k, meter in metric_logger.meters.items()}
 
 class DINOLoss(nn.Module):
     def __init__(self, out_dim, ncrops, warmup_teacher_temp, teacher_temp,
@@ -565,7 +569,36 @@ class DINOLoss(nn.Module):
         # ema update
         self.center = self.center * self.center_momentum + batch_center * (1 - self.center_momentum)
 
+@torch.no_grad()
+def sinkhorn_knopp(prototypes, temp, n_iterations):
+        prototypes = prototypes.float()
+        # print(prototypes.shape)
+        world_size = dist.get_world_size() if dist.is_initialized() else 1
+        Q = torch.exp(prototypes / temp).t()  # Q is K-by-B for consistency with notations from our paper
+        B = Q.shape[1] * world_size  # Number of samples to assign
+        K = Q.shape[0]  # How many prototypes
 
+        # Make the matrix sums to 1
+        sum_Q = torch.sum(Q)
+        if dist.is_initialized():
+            dist.all_reduce(sum_Q)
+        Q /= sum_Q
+
+        for it in range(n_iterations):
+            # Normalize each row: total weight per prototype must be 1/K
+            sum_of_rows = torch.sum(Q, dim=1, keepdim=True)
+            if dist.is_initialized():
+                dist.all_reduce(sum_of_rows)
+            Q /= sum_of_rows
+            Q /= K
+
+            # Normalize each column: total weight per sample must be 1/B
+            Q /= torch.sum(Q, dim=0, keepdim=True)
+            Q /= B
+
+        Q *= B  # the columns must sum to 1 so that Q is an assignment
+        return Q.t()  
+    
 class DataAugmentationDINO(object):
     def __init__(self, global_crops_scale, local_crops_scale, local_crops_number):
         flip_and_color_jitter = transforms.Compose([
@@ -578,8 +611,8 @@ class DataAugmentationDINO(object):
         ])
         normalize = transforms.Compose([
             transforms.ToTensor(),
-            transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
-        ])
+            transforms.Normalize((0.3441, 0.3801, 0.4076), (0.2023, 0.1366, 0.1153)),       
+        ]) # Normalize((0.4914, 0.4822, 0.4465), (0.2470, 0.2435, 0.2616)) 
 
         # first global crop
         self.global_transfo1 = transforms.Compose([
