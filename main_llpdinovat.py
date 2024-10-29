@@ -374,6 +374,24 @@ def compute_kl_loss_on_bagbatch(estimated_proportions, class_proportions, epsilo
 
     return loss
 
+class ImprovedLLPLoss(nn.Module):
+    def __init__(self, num_classes, entropy_weight=0.1):
+        super().__init__()
+        self.num_classes = num_classes
+        self.entropy_weight = entropy_weight
+    
+    def forward(self, estimated_proportions, true_proportions):
+        # KL Divergence entre las proporciones verdaderas y estimadas
+        kl_loss = F.kl_div(
+            estimated_proportions.log(), 
+            true_proportions,
+            reduction='batchmean'
+        )
+        
+        # Añadir regularización de entropía para evitar asignaciones degeneradas
+        entropy = -torch.sum(estimated_proportions * torch.log(estimated_proportions + 1e-8))
+        
+        return kl_loss - self.entropy_weight * entropy
 
 def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loader,
                     optimizer, lr_schedule, wd_schedule, momentum_schedule, epoch,
@@ -405,35 +423,28 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
             loss1 = dino_loss(student_output, teacher_output, epoch)
 
             # Paso a través de la capa de Prototipos
-            prototypes = prototypes_layer(student_output)
+            prototypes = prototypes_layer(teacher_output)
                 
             # Normalizar los prototipos antes de Sinkhorn-Knopp
             prototypes = nn.functional.normalize(prototypes, dim=1, p=2)
                 
-            # Asignar recortes a prototipos con Sinkhorn-Knopp
-            prototypes_output = sinkhorn_knopp(prototypes, temp=args.epsilon, n_iterations=args.n_iterations)
-            
-            # Asignar cada recorte a una clase (máxima probabilidad)
-            recorte_asignaciones = torch.argmax(prototypes_output, dim=1) # (640,)
-            # Calcular las proporciones observadas en el lote
-            num_classes = 10  # Número de clases
-            proporciones_observadas = torch.bincount(recorte_asignaciones, minlength=num_classes).float()
-            proporciones_observadas /= recorte_asignaciones.size(0)  # Dividir por el número total de recortes
+            # Calcular proporciones estimadas
+            estimated_proportions = calculate_proportions(prototypes)
             
             # Convertir prototypes_output a proporciones reales y calcular la pérdida KL
-            loss2 = compute_kl_loss_on_bagbatch(prototypes_output, class_proportions_global)
-            # Calcula las pérdidas
-            # batch_proportion_prediction = prototypes_output.mean(dim=0)  # Promediar sobre todos los recortes (640, 10)
-            # loss2 = proportion_loss_fn(proporciones_observadas, class_proportions)
+            # loss2 = compute_kl_loss_on_bagbatch(prototypes_output, class_proportions_global)
 
-            # Calcula la pérdida KoLeo
-            loss3 = koLeo_loss_fn(student_output)
+             # Calcular pérdidas
+            loss2 = ImprovedLLPLoss(num_classes=args.nmb_prototypes)(
+                estimated_proportions, 
+                true_proportions
+            )
 
             # Combinar las pérdidas usando el parámetro alpha
             # loss = args.alpha * loss1 + (1 - args.alpha) * loss2
     
             # Incrementa el peso de la pérdida KL
-            loss = args.beta * loss1 + args.alpha * loss2 + args.eta * loss3
+            loss = args.beta * loss1 + args.alpha * loss2
 
         # imprimir información de las salidas (solo una vez)
         if it == 0 and utils.is_main_process():
